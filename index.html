@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Golf</title>
+<meta name="description" content="Tempo trainer, practice and round tracking for my golf game.">
+<meta name="theme-color" content="#f3f5f1" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#101512" media="(prefers-color-scheme: dark)">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png" type="image/png">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;700&family=Barlow:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+  <main class="view" id="v-tempo" data-tab="tempo">
+    <div class="wrap">
+
+  <header>
+    <div class="topline"><h1>Swing Tempo Frames</h1><button class="install" id="install" hidden>Install app</button></div>
+    <p class="sub">Each rep starts with a soft, low count-in that plays your swing rhythm once. One full swing length later, the real tones play: start the takeaway on the first, reach the top on the second, strike the ball on the third.</p>
+  </header>
+
+  <section class="panel readout" aria-label="Current tempo">
+    <div>
+      <div class="label">Backswing / downswing</div>
+      <div class="big" id="big"><span class="b">24</span><span class="s">/</span><span class="d">8</span></div>
+    </div>
+    <div class="stats">
+      <div class="stat"><div class="label">Ratio</div><div class="v" id="sRatio">3.00 : 1</div></div>
+      <div class="stat"><div class="label">Backswing</div><div class="v" id="sBack">800 ms</div></div>
+      <div class="stat"><div class="label">Downswing</div><div class="v" id="sDown">267 ms</div></div>
+      <div class="stat"><div class="label">Total</div><div class="v" id="sTotal">1.07 s</div></div>
+    </div>
+  </section>
+
+  <section class="panel strip-wrap" aria-label="Frame strip">
+    <div class="row" style="justify-content:space-between">
+      <div class="row" style="gap:10px"><span class="phase" id="phase" aria-live="polite">Ready</span><div class="label" id="stripLabel">32 frames at 30 fps</div></div>
+      <div class="legend"><span><i style="background:var(--back)"></i>Backswing</span><span><i style="background:var(--down)"></i>Downswing</span><span><i style="box-shadow:inset 0 0 0 2px var(--head)"></i>Tone</span></div>
+    </div>
+    <div class="strip" id="strip"></div>
+    <div class="ticks"><span>Takeaway · 0</span><span id="tTop">Top · 24</span><span id="tImp">Impact · 32</span></div>
+  </section>
+
+  <section class="panel timer" aria-label="Session timer">
+    <div class="tface">
+      <div class="label" id="tLabel">Elapsed</div>
+      <div class="clock" id="clock" aria-live="off">0:00</div>
+    </div>
+    <div class="tctl">
+      <div class="seg" role="group" aria-label="Timer mode">
+        <button id="mUp" aria-pressed="true">Count up</button><button id="mDown" aria-pressed="false">Count down</button>
+      </div>
+      <select id="tlen" aria-label="Countdown length"><option value="300">5 min</option><option value="600">10 min</option><option value="900">15 min</option><option value="1200">20 min</option><option value="1800">30 min</option><option value="2700">45 min</option><option value="3600">60 min</option></select>
+      <button class="ghost" id="reset">Reset</button>
+    </div>
+    <p class="hint tnote" id="tNote">Runs while the tones play. Shows on your lock screen.</p>
+  </section>
+
+  <section class="panel" style="display:grid;gap:20px">
+    <div class="controls two">
+      <div class="ctl">
+        <span class="label" id="lBack">Backswing frames</span>
+        <div class="stepper" role="group" aria-labelledby="lBack"><button id="backMinus" aria-label="Fewer backswing frames">−</button><output id="backOut">24</output><button id="backPlus" aria-label="More backswing frames">+</button></div>
+      </div>
+      <div class="ctl">
+        <span class="label" id="lDown">Downswing frames</span>
+        <div class="stepper" role="group" aria-labelledby="lDown"><button id="downMinus" aria-label="Fewer downswing frames">−</button><output id="downOut">8</output><button id="downPlus" aria-label="More downswing frames">+</button></div>
+      </div>
+    </div>
+    <div class="controls">
+      <div class="ctl" style="grid-column:span 2">
+        <label class="label" for="rest">Pause between reps: <span id="restOut">4.0 s</span></label>
+        <input type="range" id="rest" min="2" max="60" step="0.5" value="4">
+      </div>
+      <div class="ctl">
+        <span class="label">Options</span>
+        <label class="check"><input type="checkbox" id="lock" checked> <span id="lockText">Lock 3:1 ratio</span></label>
+        <label class="check"><input type="checkbox" id="quiet"> Mute impact tone</label>
+        <label class="check"><input type="checkbox" id="countIn" checked> Count-in before each rep</label>
+        <label class="check"><input type="checkbox" id="awake"> Keep screen on</label>
+      </div>
+    </div>
+    <div class="row">
+      <button class="play" id="play" aria-pressed="false">Start</button>
+      <span class="hint">Keeps playing with the screen off. Pause from your lock screen.</span>
+      <span class="status" id="status" role="status"></span>
+    </div>
+  </section>
+
+  <section class="panel presets" aria-label="Presets">
+    <div class="pgroup"><div class="label">Full swing · 3 : 1</div><div class="chips" id="pFull"></div></div>
+    <div class="pgroup"><div class="label">Short game · 2 : 1</div><div class="chips" id="pShort"></div></div>
+  </section>
+
+  <section class="notes">
+    <p><b>Finding your number.</b> Most tour players land between 21/7 and 27/9 at 30 fps. Try each preset for a few swings. Pick the one that feels unhurried at the top without making you wait for the third tone.</p>
+    <p><b>Frames to time.</b> At 30 fps one frame is 33.3 ms, so 24/8 is a 0.80 s backswing and a 0.27 s downswing. The ratio stays the same across presets; only the overall speed changes.</p>
+    <p><b>Mute impact tone</b> trains you to hear two cues and produce the strike on your own, which is closer to playing without the trainer.</p>
+  </section>
+    </div>
+  </main>
+  <main class="view" id="v-practice" data-tab="practice" hidden>
+    <div class="wrap">
+      <section class="panel soon">
+        <span class="pill">Next up</span>
+        <h2>Practice</h2>
+        <ul><li>Saved practice routines with drills and target reps</li><li>A session log with notes</li><li>Start the tempo trainer from inside a routine</li></ul>
+      </section>
+    </div>
+  </main>
+  <main class="view" id="v-rounds" data-tab="rounds" hidden>
+    <div class="wrap">
+      <section class="panel soon">
+        <span class="pill">Planned</span>
+        <h2>Rounds</h2>
+        <ul><li>Hole-by-hole scoring on the course, offline</li><li>Stats you choose: fairways, greens, putts, penalties</li><li>Round history</li></ul>
+      </section>
+    </div>
+  </main>
+  <main class="view" id="v-insights" data-tab="insights" hidden>
+    <div class="wrap">
+      <section class="panel soon">
+        <span class="pill">Planned</span>
+        <h2>Insights</h2>
+        <ul><li>Trends across rounds and practice</li><li>Where strokes are being lost</li><li>Backup and restore of all your data</li></ul>
+      </section>
+    </div>
+  </main>
+
+  <nav class="tabs" aria-label="Sections">
+    <a class="tab" href="#tempo" data-tab="tempo"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h3l2-6 3 12 2-6h6"/></svg>Tempo</a>
+    <a class="tab" href="#practice" data-tab="practice"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="4"/><circle cx="12" cy="12" r=".6"/></svg>Practice</a>
+    <a class="tab" href="#rounds" data-tab="rounds"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 21V3l10 4-10 4"/><path d="M4 21h10"/></svg>Rounds</a>
+    <a class="tab" href="#insights" data-tab="insights"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>Insights</a>
+  </nav>
+<script src="js/tempo.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
