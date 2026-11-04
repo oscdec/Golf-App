@@ -1,4 +1,6 @@
-# Golf App: notes for Claude
+# KMO Golf: notes for Claude
+
+The app is named **KMO Golf** (home-screen name and title). Icon: a ball-flight arc rising into an orange target, on blue (#1d4e8c).
 
 Personal installable web app (PWA) for one golfer, used on Android in Chrome. Hosted on GitHub Pages from `main`, at https://oscdec.github.io/Golf-App/. The owner is not a developer: explain in plain words, and never ask them to run commands.
 

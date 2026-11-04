@@ -1,4 +1,4 @@
-# Golf App
+# KMO Golf
 
 A personal golf app for Android, installed from Chrome. It works offline at the range and on the course.
 
