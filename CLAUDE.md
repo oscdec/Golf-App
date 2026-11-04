@@ -13,7 +13,7 @@ Personal installable web app (PWA) for one golfer, used on Android in Chrome. Ho
 - `js/tempo.js`: Tempo tab, wrapped in its own function scope. Add each new tab as its own `js/<tab>.js`.
 - `js/rounds.js`: Rounds tab. Screens are sub-routes of `#rounds/...` so the phone's back button works. Exposes `Rounds.index()`.
 - `js/practice.js`: Practice tab (Games now; Routines next). Each game = setup + a log of inputs; progress and results are worked out by replaying the log, so Undo just pops it. Sub-routes of `#practice/...`.
-- `js/insights.js`: Insights charts (handicap index, scores with 5-round average, scoring by par type, scoring mix per round) with a date-range filter, tap tooltips and "Show numbers" tables. Hand-built SVG; reads `Rounds.history()` and `Rounds.list()`.
+- `js/insights.js`: Insights charts (handicap index, scores with 12-round rolling average, scoring by par type, scoring mix per round) with a range filter (last 10/20/40 rounds, or 3 months to all), tap tooltips and "Show numbers" tables. Hand-built SVG; reads `Rounds.history()` and `Rounds.list()`.
 - `js/app.js`: tab switching, service worker registration, install button, persistent-storage request.
 - `sw.js`: offline cache. App files are network-first, fonts cache-first.
 - `manifest.webmanifest`, `icons/`: install metadata.

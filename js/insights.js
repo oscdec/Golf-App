@@ -4,9 +4,10 @@
 (()=>{
 const root=document.getElementById("insightsRoot");if(!root)return;
 const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const COUNTS=[["r10","Last 10",10],["r20","Last 20",20],["r40","Last 40",40]];
 const RANGES=[["3m","3 months",91],["6m","6 months",182],["1y","1 year",365],["2y","2 years",730],["all","All",0]];
 let range=Store.get("insightsRange","1y");
-const ROLL=5;
+const ROLL=12,ROLL_MIN=3;
 const short=d=>Store.fmtDate(d,{month:"short",day:"numeric"});
 const long=d=>Store.fmtDate(d);
 const sgn1=v=>(v>0?"+":v<0?"−":"")+Math.abs(v).toFixed(2);
@@ -65,9 +66,18 @@ const empty=msg=>`<p class="hint i-empty">${esc(msg)}</p>`;
 function render(){
   if(!window.Rounds||!Rounds.list){root.innerHTML="";return}
   charts.length=0;
-  const from=cutoff(),inR=x=>!from||x.date>=from;
-  const hist=Rounds.history().filter(inR),list=Rounds.list().filter(inR);
-  const filt=`<div class="r-opts i-range" role="group" aria-label="Date range">${RANGES.map(([k,l])=>`<button class="r-opt" data-range="${k}" aria-pressed="${k===range}">${l}</button>`).join("")}</div>`;
+  const full=Rounds.list();
+  /* rolling average over all rounds, so the line is right at the start of any range */
+  const rollAll=full.map((_,i)=>i+1<ROLL_MIN?null:+(full.slice(Math.max(0,i-ROLL+1),i+1).reduce((a,r)=>a+r.score,0)/Math.min(ROLL,i+1)).toFixed(1));
+  const cnt=COUNTS.find(x=>x[0]===range);
+  let from,keep;
+  if(cnt){keep=full.map((r,i)=>i>=full.length-cnt[2]);from=full.length?full[Math.max(0,full.length-cnt[2])].date:"9999"}
+  else{from=cutoff();keep=full.map(r=>!from||r.date>=from)}
+  const list=full.filter((_,i)=>keep[i]),roll=rollAll.filter((_,i)=>keep[i]);
+  const hist=Rounds.history().filter(h=>!from||h.date>=from);
+  const btn=([k,l])=>`<button class="r-opt" data-range="${k}" aria-pressed="${k===range}">${l}</button>`;
+  const filt=`<div class="i-ranges"><div class="r-opts i-range" role="group" aria-label="Number of rounds">${COUNTS.map(btn).join("")}</div>
+    <div class="r-opts i-range" role="group" aria-label="Date range">${RANGES.map(btn).join("")}</div></div>`;
 
   /* handicap */
   let hc;
@@ -79,13 +89,13 @@ function render(){
 
   /* scores */
   let sc;
-  if(!list.length)sc=empty("No finished 18-hole rounds in this range yet.");
+  if(!list.length)sc=empty(cnt?"No finished 18-hole rounds yet.":"No finished 18-hole rounds in this range yet.");
   else{
-    const scores=list.map(r=>r.score),roll=scores.map((_,i)=>i+1<Math.min(ROLL,scores.length)?null:+(scores.slice(Math.max(0,i-ROLL+1),i+1).reduce((a,b)=>a+b,0)/Math.min(ROLL,i+1)).toFixed(1));
+    const scores=list.map(r=>r.score);
     const avg=scores.reduce((a,b)=>a+b,0)/scores.length;
     sc=lineChart("iScore",{labels:list.map(r=>r.date),series:[{name:"Score",vals:scores,color:"--s2",dots:true,dotsOnly:true},{name:`${ROLL}-round avg`,vals:roll,color:"--s1"}],
         fmt:v=>String(Math.round(v)),tip:(v,s)=>s.dotsOnly?String(v):v.toFixed(1)})
-      +`<p class="hint">Average ${avg.toFixed(1)} over ${scores.length} round${scores.length===1?"":"s"} · best ${Math.min(...scores)}.</p>`
+      +`<p class="hint">Average ${avg.toFixed(1)} over ${scores.length} round${scores.length===1?"":"s"} · best ${Math.min(...scores)}. The line is the average of your last ${ROLL} rounds at each point (fewer until you've logged ${ROLL}).</p>`
       +table(["Date","Score","To par",`${ROLL}-rd avg`],[...list].map((r,i)=>[long(r.date),r.score,(r.score-r.par>0?"+":"")+(r.score-r.par),roll[i]==null?"–":roll[i].toFixed(1)]).reverse());
   }
 

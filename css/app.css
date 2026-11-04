@@ -297,6 +297,7 @@ a.play{display:inline-block;text-align:center}
 /* ---------- Insights charts ---------- */
 .i-root{display:grid;gap:22px}
 .i-root:empty{display:none}
+.i-ranges{display:grid;gap:6px}
 .i-range{gap:6px}
 .i-range .r-opt{flex:0 0 auto;padding:7px 12px;min-height:38px;font-size:.88rem}
 .i-card{display:grid;gap:12px}

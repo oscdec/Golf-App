@@ -2,7 +2,7 @@
    App files: network first, so updates arrive whenever there's signal; the saved copy is used offline.
    Fonts: saved copy first, since they never change.
    Bump VERSION on every release. */
-const VERSION="golf-v7";
+const VERSION="golf-v8";
 const APP=["./","index.html","css/app.css","js/app.js","js/store.js","js/handicap.js","js/backup.js","js/tempo.js","js/rounds.js","js/practice.js","js/insights.js","manifest.webmanifest","icons/icon-192.png","icons/icon-512.png"];
 
 self.addEventListener("install",e=>{
