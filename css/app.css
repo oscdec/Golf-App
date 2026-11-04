@@ -3,16 +3,17 @@
   --bg:#f3f5f1; --panel:#ffffff; --fg:#17201a; --muted:#5d6b61; --line:#d7ddd5;
   --back:#2f7a4f; --back-soft:#d6eadc; --down:#c4572a; --down-soft:#f6ddd1; --idle:#e8ece6;
   --head:#17201a;
+  --s1:#2a78d6; --s2:#eb6834; --s3:#1baf7a; --s4:#eda100;
   --f-display:"Barlow Condensed","Arial Narrow",system-ui,sans-serif;
   --f-body:"Barlow",system-ui,-apple-system,"Segoe UI",sans-serif;
   --f-mono:"JetBrains Mono",ui-monospace,"SF Mono",Menlo,monospace;
 }
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
   --bg:#101512; --panel:#171e19; --fg:#e7ede8; --muted:#94a398; --line:#2a342d;
-  --back:#5cc188; --back-soft:#1d3a28; --down:#f08a5d; --down-soft:#432619; --idle:#212a24; --head:#e7ede8; color-scheme:dark}}
+  --back:#5cc188; --back-soft:#1d3a28; --down:#f08a5d; --down-soft:#432619; --idle:#212a24; --head:#e7ede8; --s1:#3987e5; --s2:#d95926; --s3:#199e70; --s4:#c98500; color-scheme:dark}}
 :root[data-theme="dark"]{
   --bg:#101512; --panel:#171e19; --fg:#e7ede8; --muted:#94a398; --line:#2a342d;
-  --back:#5cc188; --back-soft:#1d3a28; --down:#f08a5d; --down-soft:#432619; --idle:#212a24; --head:#e7ede8; color-scheme:dark}
+  --back:#5cc188; --back-soft:#1d3a28; --down:#f08a5d; --down-soft:#432619; --idle:#212a24; --head:#e7ede8; --s1:#3987e5; --s2:#d95926; --s3:#199e70; --s4:#c98500; color-scheme:dark}
 *,*::before,*::after{box-sizing:border-box}
 html{-webkit-text-size-adjust:100%}
 body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.5 var(--f-body);-webkit-tap-highlight-color:transparent}
@@ -292,3 +293,39 @@ a.r-row,a.play,a.ghost{text-decoration:none}
 a.play{display:inline-block;text-align:center}
 .p-call{text-transform:none}
 .p-verdict{text-transform:none;letter-spacing:0;font-size:1.25rem}
+
+/* ---------- Insights charts ---------- */
+.i-root{display:grid;gap:22px}
+.i-root:empty{display:none}
+.i-range{gap:6px}
+.i-range .r-opt{flex:0 0 auto;padding:7px 12px;min-height:38px;font-size:.88rem}
+.i-card{display:grid;gap:12px}
+.i-card h2{font:700 1.3rem/1.1 var(--f-display);text-transform:uppercase;letter-spacing:.02em;margin:0}
+.i-card>.hint{margin:0}
+.i-chart{position:relative;width:100%;touch-action:pan-y}
+.i-chart svg{display:block;overflow:visible}
+.i-grid{stroke:var(--line);stroke-width:1}
+.i-ax{font:400 11px var(--f-mono);fill:var(--muted)}
+.i-end{font:600 11px var(--f-body);fill:var(--fg)}
+.i-dot{stroke:var(--panel);stroke-width:2}
+.i-cross{stroke:var(--muted);stroke-width:1;stroke-dasharray:3 3}
+.i-tip{position:absolute;top:-6px;background:var(--fg);color:var(--bg);border-radius:8px;padding:7px 10px;font:500 .8rem/1.35 var(--f-body);display:grid;gap:2px;pointer-events:none;white-space:nowrap;z-index:2;transform:translateY(-100%)}
+.i-tip span{display:flex;align-items:center;gap:6px}
+.i-tip i{width:8px;height:8px;border-radius:2px;display:inline-block}
+.i-tip em{font-style:normal;font-family:var(--f-mono);margin-left:auto;padding-left:10px}
+.i-legend{display:flex;flex-wrap:wrap;gap:14px;font-size:.85rem;color:var(--muted)}
+.i-legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:6px;vertical-align:-1px}
+.i-empty{padding:20px 0;text-align:center}
+.i-bars{display:grid;gap:12px}
+.i-bar{display:grid;grid-template-columns:4.2em 1fr 4em;gap:10px;align-items:center}
+.i-bl{font-weight:600}
+.i-track{height:22px;background:var(--idle);border-radius:4px;overflow:hidden}
+.i-track i{display:block;height:100%;background:var(--s1);border-radius:0 4px 4px 0}
+.i-track i.neg{background:var(--s3)}
+.i-bv{font:600 1rem var(--f-mono);text-align:right;font-variant-numeric:tabular-nums}
+.i-table summary{cursor:pointer;font:600 .85rem var(--f-body);color:var(--muted)}
+.i-scroll{overflow-x:auto;margin-top:8px;max-height:280px;overflow-y:auto}
+.i-table table{width:100%;border-collapse:collapse;font:400 .85rem var(--f-mono);font-variant-numeric:tabular-nums}
+.i-table th{font:600 .7rem var(--f-body);text-transform:uppercase;letter-spacing:.05em;color:var(--muted);text-align:right;padding:6px;position:sticky;top:0;background:var(--panel)}
+.i-table td{text-align:right;padding:6px;border-top:1px solid var(--line)}
+.i-table th:first-child,.i-table td:first-child{text-align:left}

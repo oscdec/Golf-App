@@ -377,7 +377,15 @@ root.addEventListener("change",e=>{const el=e.target;
 });
 root.addEventListener("keydown",e=>{if(e.key==="Enter"&&e.target.closest(".r-addtag")){e.preventDefault();addTag(e.target)}});
 
-window.Rounds={index:()=>hcp().index};
+window.Rounds={
+  index:()=>hcp().index,
+  /* index after each score, oldest first (includes past GHIN scores) */
+  history:()=>hcp().history.filter(h=>h.index!=null).map(h=>({date:h.date,index:h.index})),
+  /* finished 18-hole rounds with every hole scored, oldest first */
+  list:()=>rounds.filter(r=>r.status==="done").map(r=>({r,s:stats(r)})).filter(x=>x.s&&x.s.complete)
+    .sort((a,b)=>a.r.date<b.r.date?-1:a.r.date>b.r.date?1:(a.r.finishedAt||0)-(b.r.finishedAt||0))
+    .map(({r,s})=>({id:r.id,date:r.date,score:s.score,par:s.par,holes:s.H.map(h=>({par:h.par,score:h.score}))})),
+};
 window.addEventListener("hashchange",render);
 render();
 })();
