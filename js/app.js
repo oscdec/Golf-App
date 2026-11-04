@@ -1,12 +1,12 @@
 /* App shell: tab switching, offline support, install button, protected storage */
 (()=>{
-  const TABS=["tempo","practice","rounds","insights"];
+  const TABS=["practice","rounds","tempo","insights"];
   const views=[...document.querySelectorAll(".view")];
   const links=[...document.querySelectorAll(".tab")];
 
   function show(){
     const want=location.hash.slice(1).split("/")[0];
-    const tab=TABS.includes(want)?want:"tempo";
+    const tab=TABS.includes(want)?want:"practice";
     views.forEach(v=>{v.hidden=v.dataset.tab!==tab});document.body.dataset.tab=tab;
     links.forEach(a=>{if(a.dataset.tab===tab)a.setAttribute("aria-current","page");else a.removeAttribute("aria-current")});
     window.scrollTo(0,0);

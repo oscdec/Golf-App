@@ -2,7 +2,7 @@
   "name": "Resonant Golf",
   "short_name": "Resonant",
   "description": "Tempo trainer, practice and round tracking for my golf game.",
-  "start_url": "./#tempo",
+  "start_url": "./#practice",
   "scope": "./",
   "id": "./",
   "display": "standalone",

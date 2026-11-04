@@ -377,6 +377,7 @@ root.addEventListener("change",e=>{const el=e.target;
 });
 root.addEventListener("keydown",e=>{if(e.key==="Enter"&&e.target.closest(".r-addtag")){e.preventDefault();addTag(e.target)}});
 
+window.Rounds={index:()=>hcp().index};
 window.addEventListener("hashchange",render);
 render();
 })();
