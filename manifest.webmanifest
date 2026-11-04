@@ -1,6 +1,6 @@
 {
-  "name": "KMO Golf",
-  "short_name": "KMO Golf",
+  "name": "Resonant Golf",
+  "short_name": "Resonant",
   "description": "Tempo trainer, practice and round tracking for my golf game.",
   "start_url": "./#tempo",
   "scope": "./",
