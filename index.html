@@ -112,26 +112,21 @@
       <section class="panel soon">
         <span class="pill">Next up</span>
         <h2>Practice</h2>
-        <ul><li>Saved practice routines with drills and target reps</li><li>A session log with notes</li><li>Start the tempo trainer from inside a routine</li></ul>
+        <ul><li>Build each day's plan from your disciplines, drills and games, with minutes for each</li><li>Saved templates, starting with "Standard ball striking"</li><li>Game results and grading charts, tracked over time</li><li>Practice minutes per discipline, over any date range</li><li>Notes and swing feels that pop up at your next session</li></ul>
       </section>
     </div>
   </main>
   <main class="view" id="v-rounds" data-tab="rounds" hidden>
-    <div class="wrap">
-      <section class="panel soon">
-        <span class="pill">Planned</span>
-        <h2>Rounds</h2>
-        <ul><li>Hole-by-hole scoring on the course, offline</li><li>Stats you choose: fairways, greens, putts, penalties</li><li>Round history</li></ul>
-      </section>
-    </div>
+    <div class="wrap" id="roundsRoot"></div>
   </main>
   <main class="view" id="v-insights" data-tab="insights" hidden>
     <div class="wrap">
       <section class="panel soon">
         <span class="pill">Planned</span>
         <h2>Insights</h2>
-        <ul><li>Trends across rounds and practice</li><li>Where strokes are being lost</li><li>Backup and restore of all your data</li></ul>
+        <ul><li>Tiger 6 mistakes over any period up to two years</li><li>Practice time by discipline</li><li>How practice, feels and mistakes relate to your scores</li><li>Export your data to talk it through with Claude</li></ul>
       </section>
+      <section class="panel r-data" id="dataPanel"></section>
     </div>
   </main>
 
@@ -141,7 +136,11 @@
     <a class="tab" href="#rounds" data-tab="rounds"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 21V3l10 4-10 4"/><path d="M4 21h10"/></svg>Rounds</a>
     <a class="tab" href="#insights" data-tab="insights"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>Insights</a>
   </nav>
+<script src="js/store.js"></script>
+<script src="js/handicap.js"></script>
+<script src="js/backup.js"></script>
 <script src="js/tempo.js"></script>
+<script src="js/rounds.js"></script>
 <script src="js/app.js"></script>
 </body>
 </html>

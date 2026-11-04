@@ -5,9 +5,9 @@
   const links=[...document.querySelectorAll(".tab")];
 
   function show(){
-    const want=location.hash.slice(1);
+    const want=location.hash.slice(1).split("/")[0];
     const tab=TABS.includes(want)?want:"tempo";
-    views.forEach(v=>{v.hidden=v.dataset.tab!==tab});
+    views.forEach(v=>{v.hidden=v.dataset.tab!==tab});document.body.dataset.tab=tab;
     links.forEach(a=>{if(a.dataset.tab===tab)a.setAttribute("aria-current","page");else a.removeAttribute("aria-current")});
     window.scrollTo(0,0);
   }
