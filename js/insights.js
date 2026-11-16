@@ -79,7 +79,9 @@ function render(){
   if(cnt){keep=full.map((r,i)=>i>=full.length-cnt[2]);from=full.length?full[Math.max(0,full.length-cnt[2])].date:"9999"}
   else{from=cutoff();keep=full.map(r=>!from||r.date>=from)}
   const list=full.filter((_,i)=>keep[i]),roll=rollAll.filter((_,i)=>keep[i]);
-  const hist=Rounds.history().filter(h=>!from||h.date>=from);
+  /* handicap: a round-count filter means the last N scores, which includes past GHIN scores */
+  const histAll=Rounds.history();
+  const hist=cnt?histAll.slice(-cnt[2]):histAll.filter(h=>!from||h.date>=from);
   const btn=([k,l])=>`<button class="r-opt" data-range="${k}" aria-pressed="${k===range}">${l}</button>`;
   const filt=`<div class="i-ranges"><div class="r-opts i-range" role="group" aria-label="Number of rounds">${COUNTS.map(btn).join("")}</div>
     <div class="r-opts i-range" role="group" aria-label="Date range">${RANGES.map(btn).join("")}</div></div>`;
