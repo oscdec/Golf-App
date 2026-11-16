@@ -1,4 +1,4 @@
-/* Insights tab: round stats charts (handicap index, scores, scoring by par type, scoring mix).
+/* Insights tab: round stats charts (handicap index, scores, Tiger 6, penalties, GIR+1, scoring by par type, scoring mix).
    Charts are hand-built SVG sized to the screen, with tap/drag tooltips and a "Show numbers" table.
    Data comes from Rounds.history() and Rounds.list(). Redrawn whenever the tab is shown. */
 (()=>{
@@ -8,6 +8,11 @@ const COUNTS=[["r10","Last 10",10],["r20","Last 20",20],["r40","Last 40",40]];
 const RANGES=[["3m","3 months",91],["6m","6 months",182],["1y","1 year",365],["2y","2 years",730],["all","All",0]];
 let range=Store.get("insightsRange","1y");
 const ROLL=12,ROLL_MIN=3;
+const T6=[["D","Bad drive"],["T","Bad tee shot, not driver"],["115","Missed green inside 115"],["DC","Double chip"],["3p","Three-putt"],["5","Bogey or worse on a par 5"]];
+let t6pick="all";
+/* rolling average of f over all rounds, so the line is right at the start of any range */
+const rolling=(full,f)=>full.map((_,i)=>i+1<ROLL_MIN?null:+(full.slice(Math.max(0,i-ROLL+1),i+1).reduce((a,r)=>a+f(r),0)/Math.min(ROLL,i+1)).toFixed(2));
+const avgOf=(a,f)=>a.length?a.reduce((s,x)=>s+f(x),0)/a.length:0;
 const short=d=>Store.fmtDate(d,{month:"short",day:"numeric"});
 const long=d=>Store.fmtDate(d);
 const sgn1=v=>(v>0?"+":v<0?"−":"")+Math.abs(v).toFixed(2);
@@ -42,7 +47,7 @@ function draw(c){
     if(!s.dotsOnly){let d="";pts.forEach(p=>{if(p)d+=(d?"L":"M")+p[0].toFixed(1)+" "+p[1].toFixed(1)});
       if(d)lines+=`<path d="${d}" fill="none" stroke="var(${s.color})" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>`;
       if(n===1&&pts[0])lines+=`<circle cx="${pts[0][0]}" cy="${pts[0][1]}" r="4" fill="var(${s.color})"/>`}
-    const last=[...pts].reverse().find(Boolean);if(named&&last)ends.push({y:last[1],name:s.name,color:s.color});
+    const last=[...pts].reverse().find(Boolean);if(named&&last&&!s.dotsOnly)ends.push({y:last[1],name:s.name,color:s.color});
   });
   ends.sort((a,b)=>a.y-b.y);for(let i=1;i<ends.length;i++)if(ends[i].y-ends[i-1].y<13)ends[i].y=ends[i-1].y+13;
   const lab=ends.map(e=>`<text x="${W-R+8}" y="${e.y+4}" class="i-end">${esc(e.name)}</text>`).join("");
@@ -99,6 +104,47 @@ function render(){
       +table(["Date","Score","To par",`${ROLL}-rd avg`],[...list].map((r,i)=>[long(r.date),r.score,(r.score-r.par>0?"+":"")+(r.score-r.par),roll[i]==null?"–":roll[i].toFixed(1)]).reverse());
   }
 
+  /* Tiger 6 */
+  let t6;
+  if(!list.length)t6=empty("Shows once you've finished a round in this range.");
+  else{
+    const f=t6pick==="all"?r=>r.t6total:r=>r.t6[t6pick]||0;
+    const name=t6pick==="all"?"Tiger 6":t6pick;
+    const rl=rolling(full,f).filter((_,i)=>keep[i]);
+    const per=T6.map(([k,l])=>({k,l,avg:avgOf(list,r=>r.t6[k]||0),n:list.reduce((a,r)=>a+(r.t6[k]||0),0)})).sort((a,b)=>b.avg-a.avg);
+    const max=Math.max(0.1,...per.map(x=>x.avg));
+    const pick=`<div class="r-opts i-t6" role="group" aria-label="Mistake type">${[["all","All"],...T6].map(([k,l])=>`<button class="r-opt" data-t6="${k}" aria-pressed="${k===t6pick}" title="${esc(k==="all"?"All six":l)}">${esc(k==="all"?"All":k)}</button>`).join("")}</div>`;
+    t6=pick+lineChart("iT6",{labels:list.map(r=>r.date),series:[{name:t6pick==="all"?"Mistakes":name,vals:list.map(f),color:"--s2",dots:true,dotsOnly:true},{name:`${ROLL}-round avg`,vals:rl,color:"--s1"}],
+        fmt:v=>String(Math.round(v)),tip:(v,s)=>s.dotsOnly?String(v):v.toFixed(1)})
+      +`<p class="hint">${t6pick==="all"?"All six mistakes":esc(T6.find(x=>x[0]===t6pick)[1])} per round: average ${avgOf(list,f).toFixed(1)} over ${list.length} round${list.length===1?"":"s"}. Tap a type above to see its trend.</p>`
+      +`<div class="label i-sub">Average per round, by type</div>
+      <div class="i-bars">${per.map(x=>`<div class="i-bar"><span class="i-bl" title="${esc(x.l)}">${esc(x.k)}</span><span class="i-track"><i style="width:${Math.max(x.avg?2:0,x.avg/max*100)}%"></i></span><span class="i-bv">${x.avg.toFixed(1)}</span></div>`).join("")}</div>
+      <p class="hint">${T6.map(([k,l])=>`<b>${esc(k)}</b> ${esc(l.toLowerCase())}`).join(" · ")}.</p>`
+      +table(["Date",...T6.map(x=>x[0]),"Total"],list.map(r=>[long(r.date),...T6.map(([k])=>r.t6[k]||0),r.t6total]).reverse());
+  }
+
+  /* penalties */
+  let pn;
+  if(!list.length)pn=empty("Shows once you've finished a round in this range.");
+  else{
+    const rl=rolling(full,r=>r.pen).filter((_,i)=>keep[i]);
+    pn=lineChart("iPen",{labels:list.map(r=>r.date),series:[{name:"Penalty strokes",vals:list.map(r=>r.pen),color:"--s2",dots:true,dotsOnly:true},{name:`${ROLL}-round avg`,vals:rl,color:"--s1"}],
+        fmt:v=>String(Math.round(v)),tip:(v,s)=>s.dotsOnly?String(v):v.toFixed(1)})
+      +`<p class="hint">Penalty strokes per round: average ${avgOf(list,r=>r.pen).toFixed(1)} · ${list.filter(r=>!r.pen).length} of ${list.length} rounds with none.</p>`
+      +table(["Date","Penalty strokes",`${ROLL}-rd avg`],list.map((r,i)=>[long(r.date),r.pen,rl[i]==null?"–":rl[i].toFixed(1)]).reverse());
+  }
+
+  /* GIR+1 */
+  let gi;
+  if(!list.length)gi=empty("Shows once you've finished a round in this range.");
+  else{
+    const rl=rolling(full,r=>r.gir1).filter((_,i)=>keep[i]);
+    gi=lineChart("iGir",{labels:list.map(r=>r.date),series:[{name:"GIR+1",vals:list.map(r=>r.gir1),color:"--s2",dots:true,dotsOnly:true},{name:`${ROLL}-round avg`,vals:rl,color:"--s1"}],
+        fmt:v=>String(Math.round(v)),tip:(v,s)=>(s.dotsOnly?String(v):v.toFixed(1))+" of 18"})
+      +`<p class="hint">Holes per round where you reached the green within one shot over regulation. Average ${avgOf(list,r=>r.gir1).toFixed(1)} of 18 (${(avgOf(list,r=>r.gir1)/18*100).toFixed(0)}%) · best ${Math.max(...list.map(r=>r.gir1))}.</p>`
+      +table(["Date","GIR+1",`${ROLL}-rd avg`],list.map((r,i)=>[long(r.date),r.gir1,rl[i]==null?"–":rl[i].toFixed(1)]).reverse());
+  }
+
   /* par type */
   let pt;
   if(!list.length)pt=empty("Shows once you've finished a round in this range.");
@@ -128,11 +174,15 @@ function render(){
   root.innerHTML=`<header><h1>Insights</h1></header>${filt}
   <section class="panel i-card"><h2>Handicap index</h2>${hc}</section>
   <section class="panel i-card"><h2>Scores</h2>${sc}</section>
+  <section class="panel i-card"><h2>Tiger 6 mistakes</h2>${t6}</section>
+  <section class="panel i-card"><h2>Penalties</h2>${pn}</section>
+  <section class="panel i-card"><h2>GIR+1</h2>${gi}</section>
   <section class="panel i-card"><h2>Scoring by par type</h2>${pt}</section>
   <section class="panel i-card"><h2>Scoring mix per round</h2>${mx}</section>`;
   charts.forEach(draw);
 }
-root.addEventListener("click",e=>{const b=e.target.closest("[data-range]");if(!b)return;range=b.dataset.range;Store.set("insightsRange",range);render()});
+root.addEventListener("click",e=>{const t=e.target.closest("[data-t6]");if(t){t6pick=t.dataset.t6;render();return}
+  const b=e.target.closest("[data-range]");if(!b)return;range=b.dataset.range;Store.set("insightsRange",range);render()});
 const showing=()=>location.hash.slice(1).split("/")[0]==="insights";
 window.addEventListener("hashchange",()=>{if(showing())render()});
 let rt;window.addEventListener("resize",()=>{clearTimeout(rt);rt=setTimeout(()=>{if(showing())charts.forEach(draw)},150)});

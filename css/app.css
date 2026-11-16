@@ -317,6 +317,9 @@ a.play{display:inline-block;text-align:center}
 .i-legend{display:flex;flex-wrap:wrap;gap:14px;font-size:.85rem;color:var(--muted)}
 .i-legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:6px;vertical-align:-1px}
 .i-empty{padding:20px 0;text-align:center}
+.i-t6{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:5px;margin-bottom:10px}
+.i-t6 .r-opt{padding:7px 0;min-height:38px;font:600 .88rem var(--f-mono);text-align:center}
+.i-sub{margin:14px 0 10px}
 .i-bars{display:grid;gap:12px}
 .i-bar{display:grid;grid-template-columns:4.2em 1fr 4em;gap:10px;align-items:center}
 .i-bl{font-weight:600}
