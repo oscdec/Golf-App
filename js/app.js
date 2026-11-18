@@ -1,6 +1,6 @@
 /* App shell: tab switching, offline support, install button, protected storage */
 (()=>{
-  const TABS=["practice","rounds","tempo","insights"];
+  const TABS=["practice","rounds","notes","tempo","insights"];
   const views=[...document.querySelectorAll(".view")];
   const links=[...document.querySelectorAll(".tab")];
 
