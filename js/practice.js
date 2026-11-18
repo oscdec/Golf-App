@@ -494,6 +494,9 @@ root.addEventListener("keydown",e=>{if(e.key!=="Enter")return;
   else if(e.target.id==="bOff"){e.preventDefault();act.shot()}
   else if(e.target.id==="skScore"||e.target.id==="skHcp"||e.target.id==="skNote"){e.preventDefault();act.sksave()}});
 root.addEventListener("input",e=>e.target.classList?.remove("bad"));
+/* For the Insights tab: names, formats and direction of each game. */
+window.PracticeMeta={has:k=>!!G[k],name:k=>G[k].name,label:(k,s)=>G[k].label(s||{}),fmt:(k,v)=>G[k].fmt(v),avg:(k,v)=>fmtAvg(k,v),better:k=>G[k].better,bench:k=>!!G[k].bench,
+  axis:(k,v)=>k==="range"?toPar(Math.round(v)):G[k].bench&&v<0?"+"+(+(-v).toFixed(1)):String(+(+v).toFixed(1))};
 Sessions.init({go,render,
   launch(k,o){if(!G[k])return;const g=active();if(g&&g.game!==k){if(!confirm(`${G[g.game].name} is still in progress. Discard it and start ${G[k].name}?`))return;games=games.filter(x=>x!==g);save()}
     else if(g){go("play");return}

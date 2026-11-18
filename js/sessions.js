@@ -460,5 +460,5 @@ const act={
   window.addEventListener("pointercancel",e=>end(e,true));
 })();
 
-return {init,weekTotal,logFree,countGame,matchSession,title:id=>SESS[id]?SESS[id].title:id,weekCard,sessView,runView,sumView,runBar,homeCard,running,addGame,act,paint};
+return {routineTitle:k=>ROUTINES[k]?ROUTINES[k].title:k,init,weekTotal,logFree,countGame,matchSession,title:id=>SESS[id]?SESS[id].title:id,weekCard,sessView,runView,sumView,runBar,homeCard,running,addGame,act,paint};
 })();

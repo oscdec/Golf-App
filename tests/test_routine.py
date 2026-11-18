@@ -1,0 +1,71 @@
+import os,sys
+os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH","/opt/pw-browsers")
+from playwright.sync_api import sync_playwright
+BASE="http://localhost:8765/index.html";OUT=os.path.dirname(os.path.abspath(__file__))
+errors=[];fails=[]
+def check(c,m):
+    print(("PASS " if c else "FAIL ")+m)
+    if not c: fails.append(m)
+
+def ci(pg):
+    pg.wait_for_timeout(120)
+    if pg.locator("[data-act=cistart],[data-act=ciend]").count():
+        pg.click('[data-act=ci][data-q=fun][data-v=yes]');pg.click('[data-act=ci][data-q=life][data-v=no]');pg.click('[data-act=ci][data-q=hq][data-v="8"]')
+        pg.click("[data-act=cistart],[data-act=ciend]");pg.wait_for_timeout(200)
+with sync_playwright() as p:
+    b=p.chromium.launch();ctx=b.new_context(viewport={"width":390,"height":844},device_scale_factor=2,service_workers="block")
+    pg=ctx.new_page();pg.on("pageerror",lambda e:errors.append(str(e)))
+    pg.on("console",lambda m:m.type=="error" and "fonts.g" not in m.text and "ERR_" not in m.text and errors.append(m.text))
+    pg.on("dialog",lambda d:d.accept())
+    pg.goto(BASE+"#practice");pg.evaluate("localStorage.clear()");pg.reload();pg.wait_for_timeout(300)
+    tue=pg.locator(".s-day").nth(1).text_content()
+    check("Technical Ball Striking" in tue and "Center Strike / Startline or Face Control / Tempo" in tue,"Tuesday shows the renamed session with both routines")
+    pg.goto(BASE+"#practice/s/striking");pg.wait_for_timeout(150)
+    check("Rotate in the barrel" in pg.content() and "Split grip" in pg.content() and "7 of 10" in pg.content(),"session page outlines both routines")
+    pg.screenshot(path=f"{OUT}/r1-session.png",full_page=True)
+    pg.click("[data-act=startone]");pg.wait_for_timeout(200);ci(pg)
+    check(pg.locator("[data-act=pickr]").count()==2,"asks which routine")
+    pg.screenshot(path=f"{OUT}/r2-pick.png",full_page=True)
+    pg.click('[data-act=pickr][data-r=face]');pg.wait_for_timeout(100)
+    check(pg.locator(".s-stepname").text_content()=="Warm-Up" and "Feel the club" in pg.content(),"Face Control routine starts")
+    pg.click('[data-act=pickr][data-r=""]');pg.wait_for_timeout(100)
+    pg.click('[data-act=pickr][data-r=center]');pg.wait_for_timeout(1300)
+    check(pg.locator(".s-stepname").text_content()=="Warm-Up","starts on step 1")
+    sc=pg.locator('[data-clock=step]').text_content();check(sc.startswith("4:5"),f"step countdown ({sc})")
+    pg.click('[data-act=step][data-v="1"]');pg.wait_for_timeout(100)
+    check(pg.locator(".s-stepname").text_content()=="Technique" and "Easy hands, patient at the top" in pg.content(),"Technique drills")
+    pg.click('[data-act=step][data-v="1"]');pg.wait_for_timeout(100)
+    for j,n in [(0,4),(1,3),(2,2)]:
+        for _ in range(n): pg.click(f'[data-act=tal][data-j="{j}"][data-v="1"]');pg.wait_for_timeout(15)
+    for _ in range(3): pg.click('[data-act=tal][data-j="0"][data-v="1"]');pg.wait_for_timeout(15)  # capped at 5
+    check("Total 9 of 15" in pg.content() or "Total 10 of 15" in pg.content(),"strike tally (capped at 5 per club)")
+    check("5 / 5" in pg.locator(".s-tally").first.text_content(),"cap at 5")
+    pg.screenshot(path=f"{OUT}/r3-strike.png",full_page=True)
+    pg.click('[data-act=step][data-v="1"]');pg.wait_for_timeout(80);pg.click('[data-act=step][data-v="1"]');pg.wait_for_timeout(80)
+    check(pg.locator(".s-stepname").text_content()=="Performance","Performance step")
+    for _ in range(5): pg.click('[data-act=tal][data-j="0"][data-v="1"]');pg.wait_for_timeout(15)
+    check("1 More To Pass" in pg.content(),"pass mark is now 6")
+    pg.click('[data-act=tal][data-j="0"][data-v="1"]');pg.wait_for_timeout(50)
+    check("✓ Passed" in pg.content(),"passes at 6 of 10")
+    pg.screenshot(path=f"{OUT}/r4-perf.png",full_page=True)
+    pg.click("[data-act=next]");pg.wait_for_timeout(300);ci(pg)
+    log=pg.evaluate("JSON.parse(localStorage.getItem('rg.practiceLog'))")[0]
+    check(log["title"]=="Technical Ball Striking · Center Strike / Startline" and log["results"][0]["total"]==10 and log["results"][2]["pass"] is True and log["results"][2]["total"]==6,"routine results logged")
+    pg.screenshot(path=f"{OUT}/r5-summary.png",full_page=True)
+    # Face Control: driver challenge pass at 7
+    pg.goto(BASE+"#practice/s/striking");pg.wait_for_timeout(150);pg.click("[data-act=startone]");pg.wait_for_timeout(150);ci(pg)
+    pg.click('[data-act=pickr][data-r=face]');pg.wait_for_timeout(100)
+    for _ in range(3): pg.click('[data-act=step][data-v="1"]');pg.wait_for_timeout(60)
+    check(pg.locator(".s-stepname").text_content()=="Driver Challenge","Driver challenge step")
+    for _ in range(7): pg.click('[data-act=tal][data-j="0"][data-v="1"]');pg.wait_for_timeout(15)
+    check("✓ Passed" in pg.content(),"driver challenge passes at 7")
+    pg.screenshot(path=f"{OUT}/r6-face.png",full_page=True)
+    pg.click("[data-act=next]");pg.wait_for_timeout(250);ci(pg)
+    pg.goto(BASE+"#practice/g/chipc");pg.click("[data-act=begin]");pg.wait_for_timeout(100)
+    calls=set()
+    for i in range(18):
+        calls.add(pg.locator(".p-call span").text_content());pg.click('.c-zones [data-v="2"]');pg.wait_for_timeout(15)
+    check(any("Under 10 yards" in c for c in calls),"short chip shows its distance")
+    b.close()
+check(not errors,"no script errors "+"; ".join(errors))
+sys.exit(1 if fails else 0)
