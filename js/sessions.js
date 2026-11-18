@@ -31,7 +31,13 @@ const ROUTINES={
     {name:"Startline",min:10,prompt:"Can you start the ball on line?",tally:[["Draw",5],["Straight",5],["Fade",5]]},
     {name:"Performance",min:10,prompt:"Visualize the first hole. Hit at least 5 of 10 in the fairway to pass.",tally:[["Fairways",10]],pass:5},
   ]},
-  face:{title:"Face Control / Tempo",steps:null},
+  /* From Dane Cvetkovic's "full range session if you want to break 80" Short. Its blocks add up to 63 minutes. */
+  face:{title:"Face Control / Tempo",steps:[
+    {name:"Warm-up",min:3,items:["Loosen up","Feel the club"]},
+    {name:"Technique",min:20,items:["5× Stable neck","5× Split grip","10× Center strike"]},
+    {name:"Startline & Tempo",min:20,prompt:"33% – 66% – 100%",tip:"Hit shots at about a third, two-thirds and full speed, starting each one on your line."},
+    {name:"Driver challenge",min:20,prompt:"10 shots: hit 7 of 10 inside your zone (50 yards wide) to finish.",tally:[["Inside the zone",10]],pass:7},
+  ]},
 };
 const rTitle=id=>ROUTINES[id]?ROUTINES[id].title:"";
 const SLOTS=[["mon","Monday","Mon"],["tue","Tuesday","Tue"],["wed","Wednesday","Wed"],["thu","Thursday","Thu"],["fri","Friday","Fri"],["wknd","Weekend · Sat or Sun","Weekend"]];
