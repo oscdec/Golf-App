@@ -460,3 +460,8 @@ body.s-isdrag{user-select:none;-webkit-user-select:none;cursor:grabbing}
 button,.ghost,.r-opt,.p-btn,.r-back,.r-name,.s-name,.r-title,summary,h2,h3,.seg button,.install{text-transform:capitalize}
 .r-name small,.s-name small,.r-title small,.r-opt small,button small,.p-btn small,.s-optpill{text-transform:none}
 .s-optpill{text-transform:uppercase}
+.p-scroll{overflow-x:auto;margin:0 -4px}
+.p-grid td,.p-grid th{padding:7px 5px}
+.p-grid th small{display:block;font:400 .7rem var(--f-body);color:var(--muted)}
+.p-grid td.mark{background:var(--idle);font-weight:700}
+.p-bench+.p-log{margin-top:12px}

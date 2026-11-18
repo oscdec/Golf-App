@@ -48,16 +48,33 @@ const benchAt=(row,h)=>{const n=row.length;h=Math.max(0,Math.min(5*(n-1),h));con
 const fmtHcp=v=>v==null?"—":(v<0?"+"+(-v).toFixed(1):v.toFixed(1))+" hcp";
 const myIndex=()=>window.Rounds&&Rounds.index?Rounds.index():null;
 const prox=(e,t)=>3*Math.hypot(e.c-t,e.o);   /* yards -> feet from the target */
-/* Proximity games (launch monitor): shots by band, plays-like handicap weighted by shots in each band. */
-function proxReplay(order,log,bandOf,drv){
+/* Lou Stagner (Arccos), newsletter #96: proximity in feet from the FAIRWAY by 5-yard bucket, 50–54 … 125–129 yards,
+   for handicaps 0, 5, 10, 15, 20. Average and median. */
+const LOU_WEDGE_AVG=[[23,24,25,25,26,26,27,27,28,29,30,31,31,33,34,35],[27,28,29,30,30,31,31,33,34,34,35,36,37,39,40,42],
+  [30,32,33,34,36,37,37,38,39,41,42,43,45,46,48,50],[33,35,37,39,40,42,42,44,46,46,48,50,52,54,56,59],[37,39,41,43,45,47,48,50,52,53,55,57,59,62,64,68]];
+const LOU_WEDGE_MED=[[18,19,19,20,20,20,20,21,22,23,24,25,25,26,28,28],[21,21,22,23,23,24,24,25,26,27,28,29,30,31,32,34],
+  [23,25,26,26,28,29,29,30,30,32,33,34,35,37,39,40],[26,28,30,31,32,33,33,35,36,37,39,41,42,43,45,47],[29,31,33,35,36,38,38,40,42,42,44,46,48,49,51,54]];
+/* Lou Stagner (Arccos), newsletter #137: % of drives that were solid, handicaps 0, 5, 10, 15, 20, by distance within each group. */
+const LOU_SOLID={short:[59.3,61.3,61.3,60.6,60.6],mid:[55.8,52.1,49.3,47.2,46.1],long:[47.9,43.7,40.6,38.6,37.3]};
+/* The benchmark for one target distance: Lou's per-distance numbers where he has them, Shot Scope beyond 129 yards. */
+function benchFor(t){
+  if(t<50)return {row:t<=35?LOU_CHIP[30]:[17.0,20.2,24.2,26.4,29.1],stat:"median",src:"30–40 yd: Lou Stagner, medians from the rough"};
+  if(t<130){const b=Math.min(15,Math.floor((t-50)/5));return {row:LOU_WEDGE_AVG.map(h=>h[b]),stat:"average",src:"50–129 yd: Lou Stagner, averages from the fairway"}}
+  return {row:t<150?APPROACH.b100:APPROACH.b150,stat:"average",src:"140+ yd: Shot Scope on-course averages"};
+}
+/* Proximity games (launch monitor): each target distance is scored against its own benchmark and turned into the
+   handicap it plays like; the game's result is the average over the distances (equal shots at each). */
+function distReplay(order,log,drv){
   const shots=log.map((e,i)=>{const t=order[i];
     if(t==="D")return {t,e,drive:true,solid:e.c>=drv-30&&Math.abs(e.o)<=20};
-    return {t,e,ft:prox(e,t),band:bandOf(t)}});
-  const ir=shots.filter(x=>!x.drive),bands={};
-  ir.forEach(x=>{const b=bands[x.band]=bands[x.band]||{n:0,sum:0,fts:[]};b.n++;b.sum+=x.ft;b.fts.push(x.ft)});
-  let w=0,acc=0;Object.entries(bands).forEach(([k,b])=>{b.med=!!MEDIAN_BANDS[k];b.avg=b.med?median(b.fts):b.sum/b.n;b.hc=playsLike(b.avg,APPROACH[k]);w+=b.n;acc+=b.hc*b.n});
+    return {t,e,ft:prox(e,t)}});
+  const ir=shots.filter(x=>!x.drive),by={};
+  ir.forEach(x=>{(by[x.t]=by[x.t]||[]).push(x.ft)});
+  const per=Object.keys(by).map(Number).sort((a,b)=>a-b).map(t=>{const b=benchFor(t),f=by[t],v=b.stat==="median"?median(f):sum(f)/f.length;
+    return {t,n:f.length,v,stat:b.stat,src:b.src,row:b.row,hc:playsLike(v,b.row)}});
+  let w=0,acc=0;per.forEach(x=>{w+=x.n;acc+=x.hc*x.n});
   const dr=shots.filter(x=>x.drive);
-  return {n:log.length,shots,ir,dr,bands,solid:dr.filter(x=>x.solid).length,hc:w?r1(acc/w):null};
+  return {n:log.length,shots,ir,dr,per,solid:dr.filter(x=>x.solid).length,hc:w?r1(acc/w):null};
 }
 
 /* ---------- game definitions ---------- */
@@ -119,17 +136,17 @@ const G={
     fmt:v=>v+" ball"+(v===1?"":"s")},
   bsc:{name:"Ball-Striking Combine",kind:"Full Swing · Launch Monitor",better:"low",bench:true,
     blurb:"24 balls: irons to six targets from 110 to 185 yards, plus 6 drives, in random order. Your result is the handicap your iron proximity plays like.",
-    rules:["One ball at a time with your full routine. The app calls every shot.","Irons: 3 balls each at 110, 125, 140, 155, 170 and 185 yards. Enter carry and offline from the SkyTrak; the app works out how many feet you finished from the target.","Drives: 6, aimed at the middle. A solid drive carries within 30 yards of your normal driver carry and finishes within 20 yards of center (Lou Stagner's definition).","Result: the handicap your average proximity plays like, against Shot Scope's on-course averages for 100–150 and 150–200 yards. Range lies are easier than the course, so expect it to flatter you a little.","Blow-ups: iron shots more than double the average for your handicap."],
-    opts:{drv:"drv"},variant:()=>"bsc",label:()=>"",
-    start:o=>({order:shuffle([...[110,125,140,155,170,185].flatMap(y=>[y,y,y]),"D","D","D","D","D","D"]),drv:+(o.drv||240)}),
-    replay:(s,log)=>{const r=proxReplay(s.order,log,t=>t<=150?"b100":"b150",s.drv);return {...r,done:log.length>=24,result:r.hc}},
+    rules:["One ball at a time with your full routine. The app calls every shot.","Irons: 3 balls each at 110, 125, 140, 155, 170 and 185 yards. Enter carry and offline from the SkyTrak; the app works out how many feet you finished from the target.","Drives: 6, aimed at the middle. A solid drive carries within 30 yards of your normal driver carry and finishes within 20 yards of center (Lou Stagner's definition).","Result: for each distance, your average against its benchmark, turned into the handicap it plays like, then averaged. 110 and 125 yards: Lou Stagner's averages from the fairway. 140 to 185 yards: Shot Scope's on-course averages (Lou's table stops at 129). Range lies are easier than the course, so expect it to flatter you a little.","Drives are compared with Lou Stagner's solid-drive percentages by handicap.","Blow-ups: iron shots more than double the benchmark for your handicap."],
+    opts:{drv:"drv"},variant:s=>s&&s.v===2?"bsc2":"bsc",label:()=>"",
+    start:o=>({v:2,order:shuffle([...[110,125,140,155,170,185].flatMap(y=>[y,y,y]),"D","D","D","D","D","D"]),drv:+(o.drv||240)}),
+    replay:(s,log)=>{const r=distReplay(s.order,log,s.drv);return {...r,done:log.length>=24,result:r.hc}},
     fmt:fmtHcp},
   wedge:{name:"Wedge Combine",kind:"Wedges · Launch Monitor",better:"low",bench:true,
     blurb:"24 wedges from 30 to 120 yards in random order. Your result is the handicap your proximity plays like.",
-    rules:["One ball at a time with your full routine. The app calls every shot: 3 balls each at 30, 40, 50, 60, 75, 90, 105 and 120 yards.","Enter carry and offline from the SkyTrak; the app works out how many feet you finished from the target.","Result: the handicap your proximity plays like. 30–40 yards: your median against Lou Stagner's Arccos medians (from the rough). 50–100 and 100–150 yards: your average against Shot Scope's on-course averages. Range lies are easier than the course, so expect it to flatter you a little.","Also shown: how many finished inside 15 feet, and blow-ups (more than double the average for your handicap)."],
-    variant:s=>s&&s.order&&s.order.includes(30)?"wedge30":"wedge",label:()=>"",
-    start:()=>({order:shuffle([30,40,50,60,75,90,105,120].flatMap(y=>[y,y,y]))}),
-    replay:(s,log)=>{const r=proxReplay(s.order,log,t=>t<50?"b30":t<=100?"b50":"b100",0);return {...r,done:log.length>=24,result:r.hc}},
+    rules:["One ball at a time with your full routine. The app calls every shot: 3 balls each at 30, 40, 50, 60, 75, 90, 105 and 120 yards.","Enter carry and offline from the SkyTrak; the app works out how many feet you finished from the target.","Result: for each distance, your proximity against Lou Stagner's Arccos numbers for that distance, turned into the handicap it plays like, then averaged. 30 and 40 yards: your median against his medians from the rough. 50 to 120 yards: your average against his averages from the fairway, in 5-yard steps. Range lies are easier than the course, so expect it to flatter you a little.","Also shown: how many finished inside 15 feet, and blow-ups (more than double the benchmark for your handicap)."],
+    variant:s=>s&&s.v===2?"wedge2":s&&s.order&&s.order.includes(30)?"wedge30":"wedge",label:()=>"",
+    start:()=>({v:2,order:shuffle([30,40,50,60,75,90,105,120].flatMap(y=>[y,y,y]))}),
+    replay:(s,log)=>{const r=distReplay(s.order,log,0);return {...r,done:log.length>=24,result:r.hc}},
     fmt:fmtHcp},
   /* The first Chipping Combine (short/medium/long, Nov 17); no longer offered, kept so past games still open. */
   chipc:{name:"Chipping Combine (Old Version)",kind:"Chipping · No Putting",better:"low",
@@ -296,7 +313,7 @@ function play(g){
     <div class="p-btns two"><button class="p-btn good" data-act="log" data-v="1"><b>Hit</b>&nbsp;</button><button class="p-btn bad" data-act="log" data-v="0"><b>Miss</b>Streak resets</button></div>`;
   }else if(k==="bsc"||k==="wedge"){
     const t=g.setup.order[s.n],drive=t==="D",lastShot=s.shots[s.shots.length-1];
-    const live=Object.entries(s.bands).map(([b,v])=>`${BAND_NAME[b]}: ${Math.round(v.avg)} ft`).join(" · ");
+    const live=s.ir.length?`average ${Math.round(sum(s.ir.map(x=>x.ft))/s.ir.length)} ft`:"";
     body=`<div class="p-head"><div class="label">Shot ${s.n+1} of 24${live?" · "+esc(live):""}</div>${bar(s.n,24)}</div>
     <div class="p-call">${drive?"Driver":t+" yd"}<span>${drive?"Aim at the middle · normal carry "+g.setup.drv+" yd":k==="wedge"?"Wedge to the target":"Iron to the target"}</span></div>
     <div class="b-entry">
@@ -364,19 +381,25 @@ function result(g,fresh){
   }else if(k==="lag"){
     extra=`<section class="panel"><div class="label">Loop attempts</div><div class="p-log">${g.log.map(v=>`<span class="${v<=12?"ok":"no"}">${v}</span>`).join("")}</div></section>`;
   }else if(k==="bsc"||k==="wedge"){
-    const idx=myIndex(),ref=idx==null?10:idx,bands=Object.keys(s.bands).sort();
-    const blow=s.ir.filter(x=>x.ft>2*benchAt(APPROACH[x.band],ref)).length;
-    const in15=s.ir.filter(x=>x.ft<=15).length;
-    const rows=HC.map((h,i)=>[HC_LABEL[i],h,...bands.map(b=>APPROACH[b][i]!=null?APPROACH[b][i]+" ft":"—")]);
-    extra=`<section class="panel"><div class="label">Plays like</div><table class="p-bench"><tr class="hd"><th></th><td>Your average</td><td>Plays like</td></tr>
-      ${bands.map(b=>`<tr><th>${BAND_NAME[b]}</th><td>${Math.round(s.bands[b].avg)} ft${s.bands[b].med?" (median)":""}</td><td>${fmtHcp(r1(s.bands[b].hc))}</td></tr>`).join("")}</table>
-      <p class="hint">${k==="wedge"?`Inside 15 ft: ${in15} of 24. `:""}Blow-ups (more than double the ${idx==null?"10-handicap":"your-handicap"} average): ${blow}.</p></section>
-    <section class="panel"><div class="label">On-Course Benchmarks By Handicap</div>${hcTable(bands.map(b=>BAND_NAME[b]),rows,idx)}
-      <p class="hint">${idx==null?"Add rounds or past GHIN scores so the app can highlight the rows around your index.":`Highlighted: the rows around your index of ${idx.toFixed(1)}.`} ${bands.includes("b30")?"30–40 yd: Lou Stagner's Arccos medians from the rough (0–20 handicaps). Other bands: Shot Scope averages. ":""}On-course shots come from all kinds of lies, so the range usually flatters you a little.</p></section>
+    const idx=myIndex(),ref=idx==null?10:idx;
+    const bAt=t=>benchAt(benchFor(t).row,ref);
+    const blow=s.ir.filter(x=>x.ft>2*bAt(x.t)).length,in15=s.ir.filter(x=>x.ft<=15).length;
+    let lo=null,hi=null;if(idx!=null){HC.forEach((h,i)=>{if(h<=idx)lo=i});const f=HC.findIndex(h=>h>idx);hi=f<0?null:f}
+    const mk=i=>i===lo||i===hi?"mark":"";
+    const head=`<tr class="hd"><th></th>${HC_LABEL.map((l,i)=>`<td class="${mk(i)}">${l.replace(" hcp","")}</td>`).join("")}</tr>`;
+    const bench=s.per.map(x=>`<tr><th>${x.t} yd<small>${x.stat==="median"?"median":"avg"}</small></th>${HC.map((h,i)=>`<td class="${mk(i)}">${x.row[i]!=null?x.row[i]:"—"}</td>`).join("")}</tr>`).join("");
+    const srcs=[...new Set(s.per.map(x=>x.src))];
+    extra=`<section class="panel"><div class="label">Plays Like, By Distance</div><table class="p-bench"><tr class="hd"><th></th><td>You</td><td>Plays like</td></tr>
+      ${s.per.map(x=>`<tr><th>${x.t} yd</th><td>${Math.round(x.v)} ft ${x.stat==="median"?"median":"avg"}</td><td>${fmtHcp(r1(x.hc))}</td></tr>`).join("")}</table>
+      <p class="hint">${k==="wedge"?`Inside 15 ft: ${in15} of 24. `:""}Blow-ups (more than double the ${idx==null?"10-handicap":"your-handicap"} benchmark): ${blow}.</p></section>
+    <section class="panel"><div class="label">Benchmarks By Handicap (Feet)</div><div class="p-scroll"><table class="p-bench p-grid">${head}${bench}</table></div>
+      <p class="hint">${srcs.map(esc).join(". ")}. ${idx==null?"Add rounds or past GHIN scores so the app can highlight the columns around your index.":`Highlighted: the columns around your index of ${idx.toFixed(1)}.`} Lou's tables stop at 20 handicap; beyond it the app extends the trend. On-course shots come from all kinds of lies, so the range usually flatters you a little.</p></section>
     ${k==="bsc"?`<section class="panel"><div class="label">Drives</div><div class="r-big">${s.solid} of 6 solid</div>
-      <p class="hint">Solid: carry of ${g.setup.drv-30} yd or more and within 20 yd of center. Handicap benchmarks for this to come.</p>
+      <p class="hint">That's ${Math.round(s.solid/6*100)}%. Solid: carry of ${g.setup.drv-30} yd or more and within 20 yd of center. Below: Lou Stagner's Arccos numbers, % of drives that were solid by handicap, for the shortest, middle and longest hitters in each group. Six drives is a small sample, so watch the trend.</p>
+      <table class="p-bench"><tr class="hd"><th></th><td>Shortest 10%</td><td>Middle</td><td>Longest 10%</td></tr>
+      ${[0,1,2,3,4].map(i=>`<tr class="${mk(i)}"><th>${HC_LABEL[i]}</th><td>${LOU_SOLID.short[i]}%</td><td>${LOU_SOLID.mid[i]}%</td><td>${LOU_SOLID.long[i]}%</td></tr>`).join("")}</table>
       <div class="p-log">${s.dr.map(x=>`<span class="${x.solid?"ok":"no"}">${Math.round(x.e.c)} · ${r1(x.e.o)}${x.e.s||""}</span>`).join("")}</div></section>`:""}
-    <section class="panel"><div class="label">Shots (Feet From Target)</div><div class="p-shots">${s.ir.map(x=>`<span class="${x.ft<=benchAt(APPROACH[x.band],ref)/2?"ok":x.ft>2*benchAt(APPROACH[x.band],ref)?"no":""}"><b>${Math.round(x.ft)}</b>${x.t} yd</span>`).join("")}</div></section>`;
+    <section class="panel"><div class="label">Shots (Feet From Target)</div><div class="p-shots">${s.ir.map(x=>`<span class="${x.ft<=bAt(x.t)/2?"ok":x.ft>2*bAt(x.t)?"no":""}"><b>${Math.round(x.ft)}</b>${x.t} yd</span>`).join("")}</div></section>`;
   }else if(k==="chip20"){
     const idx=myIndex();
     const rows=[0,1,2,3,4].map(i=>[HC_LABEL[i],HC[i],...CHIP_YDS.map(y=>LOU_CHIP[y][i].toFixed(1))]);
