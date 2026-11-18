@@ -187,7 +187,7 @@ const GROUPS=[["Full swing",["bsc","skytrak","safe","fairway","range","must"]],[
 
 /* ---------- stats ---------- */
 const active=()=>games.find(g=>g.status==="active");
-const finished=(variant,before)=>games.filter(g=>g.status==="done"&&g.variant===variant&&(!before||g.finishedAt<before)).sort((a,b)=>a.finishedAt-b.finishedAt);
+const finished=(variant,before)=>games.filter(g=>g.status==="done"&&!g.short&&g.variant===variant&&(!before||g.finishedAt<before)).sort((a,b)=>a.finishedAt-b.finishedAt);
 function stat(key,variant,before){
   const all=finished(variant,before),last=all.slice(-AVG_N);if(!all.length)return null;
   const vals=all.map(g=>g.result),best=G[key].better==="high"?Math.max(...vals):Math.min(...vals);
@@ -203,6 +203,7 @@ let opts={},pendingTee=null,dcNext=false,side="";
 
 function render(){
   const p=route();if(!p)return;const [a,b]=p;let html;
+  if(a!=="ge")gd=null;if(a!=="edit")Sessions.act.edcancel();
   switch(a){
     case undefined:case "":html=home();break;
     case "g":if(!G[b]){go("",true);return}html=intro(b);break;
@@ -210,7 +211,10 @@ function render(){
     case "res":{const g=games.find(x=>x.id===b&&x.status!=="active");if(!g){go("",true);return}html=result(g,p[2]==="new");break}
     case "s":html=Sessions.sessView(b);if(!html){go("",true);return}break;
     case "run":html=Sessions.runView();if(!html){go("",true);return}break;
-    case "sum":html=Sessions.sumView(b);if(!html){go("",true);return}break;
+    case "sum":html=Sessions.sumView(b,p[2]==="new");if(!html){go("",true);return}break;
+    case "edit":html=Sessions.editView(b);if(!html){go("",true);return}break;
+    case "checkout":html=Sessions.checkoutView();if(!html){go("",true);return}break;
+    case "ge":{const g=games.find(x=>x.id===b&&x.status!=="active");if(!g){go("",true);return}html=editGame(g);break}
     default:go("",true);return;
   }
   if(a!=="run"&&a!==undefined&&a!=="")html=Sessions.runBar()+html;
@@ -224,15 +228,17 @@ function home(){
   const g=active();
   const card=k=>{const d=G[k],mine=games.filter(x=>x.game===k&&x.status!=="active").sort((a,b)=>b.finishedAt-a.finishedAt);
     const last=mine[0];
-    const sub=last?`Last ${Store.fmtDate(last.date,{month:"short",day:"numeric"})}: ${last.status==="failed"?"Failed":d.fmt(last.result)}${d.label(last.setup)?" · "+d.label(last.setup):""}`:"Not played yet";
+    const sub=last?`Last ${Store.fmtDate(last.date,{month:"short",day:"numeric"})}: ${last.status==="failed"?"Failed":d.fmt(last.result)}${last.short?" (shortened)":""}${d.label(last.setup)?" · "+d.label(last.setup):""}`:"Not played yet";
     return `<a class="r-row p-game" href="#practice/g/${k}"><span class="r-name">${esc(d.name)}<small>${esc(d.kind)} · ${esc(sub)}</small></span><span class="p-go">›</span></a>`};
   const cards=GROUPS.map(([lbl,ks])=>`<div class="label p-grp">${esc(lbl)}</div>${ks.map(card).join("")}`).join("");
   return `<header><h1>Practice</h1></header>
   ${Sessions.weekTotal()}
   ${Sessions.homeCard()}
+  ${Sessions.checkoutCard()}
   ${g?`<section class="panel r-active"><span class="pill live">In Progress</span><div class="r-title">${esc(G[g.game].name)}<small>${esc(G[g.game].label(g.setup))}</small></div>
     <div class="row"><button class="play" data-act="resume">Resume</button><button class="ghost" data-act="quit">Discard Game</button></div></section>`:""}
   ${Sessions.weekCard()}
+  ${Sessions.pastCard()}
   <section class="r-list"><h2 class="p-h2">Games</h2>${cards}</section>
   <section class="panel soon"><span class="pill">Coming Next</span><h2>More Practice Tools</h2>
     <ul><li>Build your own plan for a day</li><li>Practice time by discipline over any date range</li></ul></section>`;
@@ -258,7 +264,7 @@ function intro(k){
   }
   const hist=games.filter(x=>x.game===k&&x.status!=="active").sort((a,b)=>b.finishedAt-a.finishedAt).slice(0,15)
     .map(x=>`<button class="r-row" data-act="open" data-id="${x.id}"><span class="r-date">${esc(Store.fmtDate(x.date,{month:"short",day:"numeric"}))}<small>${esc(x.date.slice(0,4))}</small></span>
-      <span class="r-name">${esc(d.label(x.setup)||d.name)}</span><span class="r-score p-res">${x.status==="failed"?"Failed":esc(d.fmt(x.result))}</span></button>`).join("");
+      <span class="r-name">${esc(d.label(x.setup)||d.name)}${x.short?"<small>Shortened</small>":""}</span><span class="r-score p-res">${x.status==="failed"?"Failed":esc(d.fmt(x.result))}</span></button>`).join("");
   const busy=active();
   return `${back("","Practice")}<header><h1>${esc(d.name)}</h1><p class="sub">${esc(d.blurb)}</p></header>
   ${opt?`<section class="panel r-form">${opt}</section>`:""}
@@ -346,13 +352,13 @@ function play(g){
   }else if(k==="skytrak"){
     body=`<div class="r-field"><label class="label" for="skScore">Combine score (0–100)</label><input class="r-input" id="skScore" type="number" inputmode="decimal" step="0.1" min="0" max="100" data-autofocus></div>
     <div class="r-field"><label class="label" for="skHcp">Handicap SkyTrak shows (optional)</label><input class="r-input" id="skHcp" type="text" inputmode="decimal" placeholder="e.g. 8.4 or +1.2"></div>
-    <div class="r-field"><label class="label" for="skNote">Note (optional)</label><input class="r-input" id="skNote" type="text" placeholder="Targets, conditions…"></div>
+    <div class="r-field"><label class="label" for="skNote">Note (optional)</label><input class="r-input" id="skNote" type="text" spellcheck="false" placeholder="Targets, conditions…"></div>
     <button class="play r-wide" data-act="sksave">Save Result</button>`;
   }
   const st=stat(k,g.variant);
   return `${back("","Practice")}<header><h1>${esc(d.name)}</h1>${d.label(g.setup)?`<p class="sub">${esc(d.label(g.setup))}${st?" · average to beat "+fmtAvg(k,st.avg):""}</p>`:st?`<p class="sub">Average to beat ${fmtAvg(k,st.avg)}</p>`:""}</header>
   <section class="panel p-play">${body}</section>
-  <div class="row p-foot">${undo}${k==="lag"?`<button class="ghost danger" data-act="fail">End As Failed</button>`:""}<button class="ghost" data-act="quit">Discard</button></div>`;
+  <div class="row p-foot">${undo}${k==="lag"?`<button class="ghost danger" data-act="fail">End As Failed</button>`:k!=="skytrak"&&g.log.length?`<button class="ghost" data-act="shorten">End Early</button>`:""}<button class="ghost" data-act="quit">Discard</button></div>`;
 }
 function nums(act,vals,cur,more){
   let s=vals.map(v=>`<button class="r-num" data-act="${act}" data-v="${v}">${v}</button>`).join("");
@@ -360,11 +366,72 @@ function nums(act,vals,cur,more){
   return `<div class="r-nums">${s}</div>`;
 }
 
+/* ---------- edit a finished game: every entry, in order; empty ones at the end can be filled in ---------- */
+/* Fixed-length games: how many entries a full game has. Ladder, Must-Make Exit and Lag Putt run until done. */
+const TOTAL={safe:()=>18,combine:()=>20,bsc:()=>24,wedge:()=>24,chip20:()=>20,chipc:()=>18,updown:()=>18,fairway:()=>14,range:s=>s.holes,skytrak:()=>1};
+const UNIT={safe:"shots",combine:"putts",bsc:"shots",wedge:"shots",chip20:"chips",chipc:"chips",updown:"holes",fairway:"drives",range:"holes",ladder:"balls",must:"balls"};
+function rowLabel(g,i){const s=g.setup,k=g.game;
+  if(k==="safe")return s.order[i]?s.order[i][0]+" "+s.order[i][1]:"Shot "+(i+1);
+  if(k==="combine")return s.seq[i]+" ft";
+  if(k==="bsc"||k==="wedge")return s.order[i]==="D"?"Driver":s.order[i]+" yd";
+  if(k==="chip20")return s.order[i]+" yd";
+  if(k==="chipc")return s.order[i];
+  if(k==="updown")return s.order[i]==="I"?"Inside 25 yd":"25–50 yd";
+  if(k==="fairway")return "Drive "+(i+1)+(i>=11?" (counts double)":"");
+  if(k==="range")return "Hole "+(i+1);
+  if(k==="lag")return "Loop attempt "+(i+1);
+  if(k==="skytrak")return "SkyTrak result";
+  return "Ball "+(i+1);
+}
+let gd=null;
+const sel=(i,f,list,cur,blank=true)=>`<select class="r-input g-sel" data-ge="${i}" data-f="${f}">${blank?`<option value="">—</option>`:""}${list.map(([v,l])=>`<option value="${esc(v)}"${cur!=null&&String(cur)===String(v)?" selected":""}>${esc(l)}</option>`).join("")}</select>`;
+const numIn=(i,f,cur,min,max,step,ph)=>`<input class="r-input g-num" type="number" inputmode="decimal" data-ge="${i}" data-f="${f}" min="${min}" max="${max}" step="${step||1}" value="${cur==null?"":esc(cur)}" placeholder="${esc(ph||"")}">`;
+function rowEditor(g,i,e){const k=g.game;
+  if(k==="safe")return sel(i,"v",[[3,"+3 Sweet spot"],[1,"+1 Safe miss"],[-4,"−4 Forbidden side"]],e);
+  if(k==="fairway")return sel(i,"v",[[1,"Fairway"],[0,"Neither"],[-1,"Penalty"]],e);
+  if(k==="ladder"||k==="must")return sel(i,"v",[[1,"Hit"],[0,"Miss"]],e);
+  if(k==="combine")return numIn(i,"v",e,1,9,1,"putts");
+  if(k==="lag")return numIn(i,"v",e,1,40,1,"putts");
+  if(k==="chip20"||k==="chipc")return sel(i,"v",CHIP_ZONES.map(([l],z)=>[z,l]),e);
+  if(k==="updown")return `<div class="g-two">${numIn(i,"s",e?e.s:null,1,20,1,"strokes")}${sel(i,"dc",[[0,"Chip on the green"],[1,"Chip missed the green"]],e?(e.dc?1:0):0,false)}</div>`;
+  if(k==="range")return `<div class="g-two">${sel(i,"t",[["h","Tee: hit"],["m","Tee: miss"],["p","Tee: penalty"]],e?e.t:null)}${sel(i,"a",[["h","Approach: hit"],["m","Approach: miss"]],e?e.a:null)}</div>`;
+  if(k==="bsc"||k==="wedge")return `<div class="g-three">${numIn(i,"c",e?e.c:null,0,400,.1,"carry")}${numIn(i,"o",e?e.o:null,0,150,.1,"offline")}${sel(i,"s",[["L","Left"],["R","Right"]],e?e.s:null)}</div>`;
+  if(k==="skytrak")return `<div class="g-three">${numIn(i,"score",e?e.score:null,0,100,.1,"score")}<input class="r-input" data-ge="${i}" data-f="hcp" value="${esc(e?e.hcp:"")}" placeholder="handicap" spellcheck="false"><input class="r-input" data-ge="${i}" data-f="note" value="${esc(e?e.note:"")}" placeholder="note" spellcheck="false"></div>`;
+  return "";
+}
+/* Read every row's controls back into log entries (null = left empty). */
+function readRows(){
+  const g=games.find(x=>x.id===(gd&&gd.id));if(!g)return [];const k=g.game,by={};
+  root.querySelectorAll("[data-ge]").forEach(n=>{(by[n.dataset.ge]=by[n.dataset.ge]||{})[n.dataset.f]=n.value.trim()});
+  const n=Object.keys(by).length,out=[];
+  for(let i=0;i<n;i++){const f=by[i]||{};let e=null;
+    if(["safe","fairway","ladder","must","chip20","chipc"].includes(k))e=f.v===""?null:+f.v;
+    else if(k==="combine"||k==="lag"){const v=parseInt(f.v,10);e=v>=1?v:null}
+    else if(k==="updown"){const v=parseInt(f.s,10);e=v>=1?{s:v,dc:f.dc==="1"}:null}
+    else if(k==="range")e=f.t==="p"?{t:"p",a:null}:f.t&&f.a?{t:f.t,a:f.a}:null;
+    else if(k==="bsc"||k==="wedge"){const c=parseFloat(f.c),o=f.o===""?0:parseFloat(f.o);e=c>=0&&c<=400&&o>=0&&o<=150?{c,o,s:o?(f.s||""):""}:null}
+    else if(k==="skytrak"){const sc=parseFloat(f.score);e=sc>=0&&sc<=100?{score:sc,hcp:f.hcp||"",note:f.note||""}:null}
+    out.push(e)}
+  return out;
+}
+function editGame(g){
+  const d=G[g.game],k=g.game;if(!gd||gd.id!==g.id)gd={id:g.id,log:JSON.parse(JSON.stringify(g.log))};
+  const fixed=TOTAL[k],n=fixed?Math.max(fixed(g.setup),gd.log.length):gd.log.length;
+  const rows=Array.from({length:n},(_,i)=>{const e=gd.log[i]??null;
+    return `<div class="g-row${e==null?" empty":""}"><div class="g-lab"><b>${i+1}</b>${esc(rowLabel(g,i))}</div>${rowEditor(g,i,e)}${fixed?"":`<button class="ghost sm" data-act="gedel" data-i="${i}" aria-label="Remove ${esc(rowLabel(g,i))}">Remove</button>`}</div>`}).join("");
+  return `${back("res/"+g.id,"Result")}<header><h1>Edit ${esc(d.name)}</h1><p class="sub">${esc(Store.fmtDate(g.date,{weekday:"short",month:"short",day:"numeric"}))}${d.label(g.setup)?" · "+esc(d.label(g.setup)):""}. Fix any entry or fill in ones you missed, then save.</p></header>
+  <section class="panel g-edit">${rows}${fixed?"":`<button class="r-opt add" data-act="geadd">+ Add Another</button>`}
+    <p class="hint">${fixed?`Empty rows at the end are fine: the game is saved as shortened until every one is filled in.`:`Remove a mistaken entry or add one you forgot. The order matters, so keep them in the order you hit them.`}</p></section>
+  <div class="row"><button class="play" data-act="gesave">Save Changes</button><a class="ghost" href="#practice/res/${g.id}" style="display:inline-flex;align-items:center">Cancel</a></div>`;
+}
+
 /* ---------- result ---------- */
 function result(g,fresh){
   const d=G[g.game],k=g.game,s=d.replay(g.setup,g.log),prev=stat(k,g.variant,g.finishedAt);
   let verdict="";
-  if(g.status==="failed")verdict=`<div class="p-verdict miss">Failed · ${s.passed} of 3 loops passed in ${s.attempts} attempt${s.attempts===1?"":"s"}</div><p class="hint">Failed games don't count toward your average.</p>`;
+  const tot=TOTAL[k]?TOTAL[k](g.setup):null;
+  if(g.short)verdict=`<div class="p-verdict">Shortened · ${g.log.length}${tot?" of "+tot:""} ${esc(UNIT[k]||"entries")}</div><p class="hint">Kept in your history, but left out of your average, your best and Insights.</p>`;
+  else if(g.status==="failed")verdict=`<div class="p-verdict miss">Failed · ${s.passed} of 3 loops passed in ${s.attempts} attempt${s.attempts===1?"":"s"}</div><p class="hint">Failed games don't count toward your average.</p>`;
   else if(!prev)verdict=`<div class="p-verdict">First one in the books. This is the average to beat next time.</div>`;
   else{const win=beat(k,g.result,prev.avg),pb=G[k].better==="high"?g.result>prev.best:g.result<prev.best;
     verdict=`<div class="p-verdict ${win?"win":"miss"}">${pb?"New personal best! ":""}${win?"You beat your average":"Missed your average"} of ${fmtAvg(k,prev.avg)}.</div>`}
@@ -437,7 +504,11 @@ function result(g,fresh){
     ${now?`<p class="hint">Average now ${fmtAvg(k,now.avg)} over your last ${now.n} · best ${esc(d.fmt(now.best))}</p>`:""}</section>
   ${extra}
   ${g.countedFor?`<section class="panel s-count"><p class="s-donenote">✓ Counted as this week's ${esc(Sessions.title(g.countedFor))}</p></section>`:fresh&&!Sessions.running()&&g.status==="done"?(()=>{const m=Sessions.matchSession(k);return m?`<section class="panel s-count"><p class="hint">Played on its own, so it's logged under Extra Practice. Want it to count for this week's plan?</p><button class="ghost" data-act="countsess" data-s="${m}">Count As This Week's ${esc(Sessions.title(m))}</button></section>`:""})():""}
-  <div class="row r-actions">${fresh?`<a class="play" href="#practice${Sessions.running()?"/run":""}">${Sessions.running()?"Back To Session":"Done"}</a>`:"<span></span>"}<button class="ghost danger" data-act="delgame" data-id="${g.id}">Delete</button></div>`;
+  <div class="row r-actions">${fresh?`<a class="play" href="#practice${Sessions.running()?"/run":""}">${Sessions.running()?"Back To Session":"Done"}</a>`:""}
+    <a class="ghost" href="#practice/ge/${g.id}" style="display:inline-flex;align-items:center">Edit</a>
+    ${g.status==="done"&&k!=="skytrak"?(s.done?`<button class="ghost" data-act="toggleshort" data-id="${g.id}">${g.short?"Count It Normally":"Mark As Shortened"}</button>`:`<button class="ghost" data-act="cont" data-id="${g.id}">Continue This Game</button>`):""}
+    <button class="ghost danger" data-act="delgame" data-id="${g.id}">Delete</button></div>
+  ${g.status==="done"&&!g.short&&k!=="skytrak"?`<p class="hint">Couldn't play the full game? Mark it shortened and it stays out of your average, best and Insights.</p>`:""}`;
 }
 
 function hcTable(cols,rows,idx){
@@ -446,9 +517,11 @@ function hcTable(cols,rows,idx){
 }
 
 /* ---------- actions ---------- */
+/* Log a finished game's time once: into the running session, or as Extra Practice. (A game reopened with Continue was logged already.) */
+function logGame(g){if(g.logged)return;g.logged=true;if(Sessions.running())Sessions.addGame(g.id);else Sessions.logFree(g,G[g.game].name)}
 function finishIf(g){
   const s=G[g.game].replay(g.setup,g.log);
-  if(s.done){g.status="done";g.result=s.result;g.finishedAt=Date.now();save();if(Sessions.running())Sessions.addGame(g.id);else Sessions.logFree(g,G[g.game].name);go("res/"+g.id+"/new",true);return true}
+  if(s.done){g.status="done";g.result=s.result;g.finishedAt=g.finishedAt||Date.now();delete g.short;logGame(g);save();go("res/"+g.id+"/new",true);return true}
   save();return false;
 }
 const act={
@@ -484,7 +557,26 @@ const act={
   appr(el){const g=active();if(!g||!pendingTee)return;g.log.push({t:pendingTee,a:el.dataset.v});pendingTee=null;if(!finishIf(g))render()},
   undo(){const g=active();if(!g)return;if(pendingTee){pendingTee=null}else if(g.game==="updown"&&dcNext){dcNext=false}else g.log.pop();side="";save();render()},
   fail(){const g=active();if(!g)return;if(!confirm("End this game as failed? It's saved but left out of your average."))return;
-    const s=G.lag.replay(g.setup,g.log);g.status="failed";g.result=null;g.passed=s.passed;g.finishedAt=Date.now();save();if(Sessions.running())Sessions.addGame(g.id);else Sessions.logFree(g,G[g.game].name);go("res/"+g.id+"/new",true)},
+    const s=G.lag.replay(g.setup,g.log);g.status="failed";g.result=null;g.passed=s.passed;g.finishedAt=g.finishedAt||Date.now();logGame(g);save();go("res/"+g.id+"/new",true)},
+  shorten(){const g=active();if(!g||!g.log.length)return;
+    if(!confirm("End now and save it as shortened? It stays in your history, but it's left out of your average, your best and Insights."))return;
+    const s=G[g.game].replay(g.setup,g.log);g.status="done";g.short=true;g.result=s.result;g.finishedAt=g.finishedAt||Date.now();pendingTee=null;dcNext=false;logGame(g);save();go("res/"+g.id+"/new",true)},
+  toggleshort(el){const g=games.find(x=>x.id===el.dataset.id);if(!g)return;if(g.short)delete g.short;else g.short=true;save();render()},
+  cont(el){const g=games.find(x=>x.id===el.dataset.id);if(!g)return;const a=active();
+    if(a){alert(`Finish or discard the game in progress (${G[a.game].name}) first.`);return}
+    g.status="active";g.logged=true;delete g.short;pendingTee=null;dcNext=false;side="";save();go("play")},
+  geadd(){if(!gd)return;gd.log=readRows();gd.log.push(null);render()},
+  gedel(el){if(!gd)return;gd.log=readRows();gd.log.splice(+el.dataset.i,1);render()},
+  gesave(){const g=games.find(x=>x.id===(gd&&gd.id));if(!g)return;const rows=readRows(),fixed=!!TOTAL[g.game];let log;
+    if(fixed){const gap=rows.indexOf(null),after=gap<0?-1:rows.findIndex((x,i)=>i>gap&&x!=null);
+      if(after>=0){alert(`${rowLabel(g,gap)} (number ${gap+1}) is empty. Fill it in, or clear the ones after it.`);return}
+      log=gap<0?rows:rows.slice(0,gap)}
+    else log=rows.filter(x=>x!=null);
+    if(!log.length){alert("Nothing would be left. To remove this game, use Delete on its result screen.");return}
+    const d=G[g.game],s=d.replay(g.setup,log);g.log=log;g.edited=Date.now();
+    if(g.game==="lag"){if(s.done){g.status="done";g.result=s.result;delete g.passed}else{g.status="failed";g.result=null;g.passed=s.passed}}
+    else{g.result=s.result;if(!s.done)g.short=true}
+    gd=null;save();go("res/"+g.id,true)},
   delgame(el){if(confirm("Delete this game for good?")){const g=games.find(x=>x.id===el.dataset.id);games=games.filter(x=>x!==g);save();go(g?"g/"+g.game:"",true)}},
 };
 root.addEventListener("click",e=>{const el=e.target.closest("[data-act]");if(!el||!root.contains(el))return;const f=act[el.dataset.act]||Sessions.act[el.dataset.act];if(f){e.preventDefault();f(el)}});
@@ -504,7 +596,7 @@ Sessions.init({go,render,
   gameName:(k,o)=>G[k]?G[k].name+(k==="ladder"&&o&&o.set?" · "+(o.set==="irons"?"Irons":"Wedges"):""):k,
   gameSub:k=>G[k]?G[k].kind:"",
   gameRow:id=>{const x=games.find(g=>g.id===id);if(!x)return "";const d=G[x.game];
-    return `<a class="r-row p-game" href="#practice/res/${x.id}"><span class="r-name">${esc(d.name)}<small>${esc(d.label(x.setup)||d.kind)}</small></span><span class="r-score p-res">${x.status==="failed"?"Failed":esc(d.fmt(x.result))}</span></a>`}});
+    return `<a class="r-row p-game" href="#practice/res/${x.id}"><span class="r-name">${esc(d.name)}<small>${esc(d.label(x.setup)||d.kind)}${x.short?" · Shortened":""}</small></span><span class="r-score p-res">${x.status==="failed"?"Failed":esc(d.fmt(x.result))}</span></a>`}});
 window.addEventListener("hashchange",render);
 render();
 })();

@@ -93,7 +93,8 @@ function paintTimer(){
   updateMeta(t);
 }
 function updateMeta(t){
-  if(!("mediaSession" in navigator))return;
+  /* Only while the tones play: a practice session uses the lock screen the rest of the time. */
+  if(!("mediaSession" in navigator)||!running)return;
   const title=`${t} ${S.tmode==="down"?"left":"elapsed"} · ${S.back}/${S.down}`,artist=`${fmtRest(S.rest)} pause between reps`;
   const key=title+artist;if(key===lastMeta)return;lastMeta=key;
   try{navigator.mediaSession.metadata=new MediaMetadata({title,artist,album:"Swing Tempo Frames"});
@@ -138,7 +139,7 @@ async function start(){
   audio.src=makeLoop();audio.currentTime=0;lastPos=0;
   try{await audio.play()}catch(e){$("status").textContent="Tap Start again to allow sound";return}
   $("status").textContent="";
-  running=true;runStart=Date.now();mediaSession();
+  running=true;window.__tempoOn=true;runStart=Date.now();mediaSession();
   try{navigator.mediaSession.playbackState="playing"}catch(e){}
   shownPh="";shownLit=-1;requestAnimationFrame(draw);clearInterval(ticker);ticker=setInterval(tick,500);paintTimer();
   $("play").textContent="Stop";$("play").setAttribute("aria-pressed","true");
@@ -146,7 +147,7 @@ async function start(){
 }
 function stop(){
   if(runStart){elapsed+=Date.now()-runStart;runStart=null}
-  running=false;audio.pause();clearInterval(ticker);
+  running=false;window.__tempoOn=false;audio.pause();clearInterval(ticker);
   try{navigator.mediaSession.playbackState="paused"}catch(e){}
   $("phase").textContent="Ready";$("phase").dataset.p="";cells.forEach(c=>c.classList.remove("on"));
   $("play").textContent="Start";$("play").setAttribute("aria-pressed","false");try{wake?.release()}catch(e){}wake=null;

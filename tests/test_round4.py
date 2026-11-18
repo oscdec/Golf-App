@@ -58,9 +58,9 @@ with sync_playwright() as p:
     pg.screenshot(path=f"{OUT}/t4-tempo.png",full_page=True)
     pg.click('[data-act=step][data-v="1"]');pg.wait_for_timeout(80)
     check(pg.locator(".s-stepname").text_content()=="Driver Challenge" and "14 min" in pg.locator(".s-steps").text_content(),"driver challenge 14 min")
-    # finish: end check-in, then summary with both check-ins
+    # finish: the end-of-session screen offers today's check-out, then the summary shows the day's check-in
     pg.click("[data-act=next]");pg.wait_for_timeout(250)
-    check(pg.locator("#practiceRoot h1").text_content()=="Before You Finish","end check-in shown")
+    check(pg.locator("#practiceRoot h1").text_content()=="Done For Today?" and pg.locator("[data-act=cilater]").count()==1,"end screen offers check-out or later")
     pg.click('[data-act=ci][data-q=fun][data-v=yes]');pg.click('[data-act=ci][data-q=life][data-v=yes]');pg.click('[data-act=ci][data-q=hq][data-v="9"]')
     pg.click("[data-act=ciend]");pg.wait_for_timeout(250)
     c=pg.content()

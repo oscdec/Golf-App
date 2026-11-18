@@ -29,6 +29,14 @@ function nice(lo,hi,n){
   const a=Math.floor(lo/step)*step,b=Math.ceil(hi/step)*step,t=[];for(let v=a;v<=b+step/2;v+=step)t.push(+v.toFixed(6));return t;
 }
 const charts=[];
+/* Tap a chart to see its numbers: they stay put after you lift your finger, until you tap somewhere else.
+   With a mouse they follow the pointer and hide when it leaves. */
+function bindTip(svg,show,hide){
+  svg.addEventListener("pointerdown",show);svg.addEventListener("pointermove",show);
+  svg.addEventListener("pointerleave",e=>{if(e.pointerType==="mouse")hide()});
+  svg.__hide=hide;
+}
+document.addEventListener("pointerdown",e=>{root.querySelectorAll(".i-chart svg").forEach(s=>{if(s.__hide&&!s.parentNode.contains(e.target))s.__hide()})},{capture:true});
 function lineChart(id,{labels,series,fmt,tip}){
   const n=labels.length;
   const legend=series.length>1?`<div class="i-legend">${series.map(s=>`<span><i style="background:var(${s.color})"></i>${esc(s.name)}</span>`).join("")}</div>`:"";
@@ -65,7 +73,7 @@ function draw(c){
     tipEl.innerHTML=`<b>${esc(long(c.labels[i]))}</b>`+c.series.map(s=>s.vals[i]==null?"":`<span><i style="background:var(${s.color})"></i>${esc(s.name)} <em>${c.tip(s.vals[i],s,i)}</em></span>`).join("");
     tipEl.hidden=false;const tw=tipEl.offsetWidth;tipEl.style.left=Math.max(0,Math.min(W-tw,X(i)-tw/2))+"px"};
   const hide=()=>{tipEl.hidden=true;cross.setAttribute("visibility","hidden")};
-  svg.addEventListener("pointerdown",show);svg.addEventListener("pointermove",show);svg.addEventListener("pointerleave",hide);
+  bindTip(svg,show,hide);
 }
 function table(head,rows){
   return `<details class="i-table"><summary>Show numbers</summary><div class="i-scroll"><table><thead><tr>${head.map(h=>`<th>${esc(h)}</th>`).join("")}</tr></thead>
@@ -197,12 +205,13 @@ const pct=(a,b)=>b?Math.round(a/b*100):null;
 const avgN=a=>a.length?a.reduce((x,y)=>x+y,0)/a.length:null;
 const sgnF=v=>(v>0?"+":v<0?"−":"")+Math.abs(v).toFixed(1);
 
-/* Check-ins grouped by session: {run,date,at,start,end}. */
+/* Check-ins grouped by day (the check-in is once a day): the day's first start and last check-out. {date,at,start,end}. */
 function checkinSessions(){
   const d=new Date();d.setDate(d.getDate()-(CI_DAYS-1));const cut=Store.iso(d);
-  const by={};(Store.get("checkins",[])||[]).forEach(c=>{if(!c||!c.date||c.date<cut)return;const k=c.run||("x"+c.at);
-    const o=by[k]=by[k]||{run:k,date:c.date};o[c.when==="end"?"end":"start"]=c});
-  const list=Object.values(by).map(o=>({...o,at:(o.start||o.end).at||new Date(o.date+"T12:00").getTime()})).sort((a,b)=>a.at-b.at);
+  const by={};(Store.get("checkins",[])||[]).forEach(c=>{if(!c||!c.date||c.date<cut)return;
+    const o=by[c.date]=by[c.date]||{date:c.date};
+    if(c.when==="end"){if(!o.end||c.at>=o.end.at)o.end=c}else if(!o.start||c.at<o.start.at)o.start=c});
+  const list=Object.values(by).map(o=>({...o,at:new Date(o.date+"T12:00").getTime()})).sort((a,b)=>a.at-b.at);
   return {cut,list};
 }
 
@@ -234,40 +243,40 @@ function drawCI(c){
     const bx=X(best.at),b=best.start||{},a=best.end||{};
     cross.setAttribute("x1",bx);cross.setAttribute("x2",bx);cross.setAttribute("visibility","visible");
     const d=b.hq!=null&&a.hq!=null?a.hq-b.hq:null;
-    tipEl.innerHTML=`<b>${esc(long(best.date))} · ${esc(clock(best.at))}</b>
+    tipEl.innerHTML=`<b>${esc(long(best.date))}${b.at?" · "+esc(clock(b.at)):""}${a.at?"–"+esc(clock(a.at)):""}</b>
       <span><i style="background:var(--s1)"></i>Before <em>${b.hq??"—"} · fun ${yn(b.fun)} · life ${yn(b.life)}</em></span>
       <span><i style="background:var(--s2)"></i>After <em>${a.hq??"—"} · fun ${yn(a.fun)} · life ${yn(a.life)}</em></span>
       ${d==null?"":`<span>Happiness change <em>${d>0?"+":d<0?"−":""}${Math.abs(d)}</em></span>`}`;
     tipEl.hidden=false;const tw=tipEl.offsetWidth;tipEl.style.left=Math.max(0,Math.min(W-tw,bx-tw/2))+"px"};
   const hide=()=>{tipEl.hidden=true;cross.setAttribute("visibility","hidden")};
-  svg.addEventListener("pointerdown",show);svg.addEventListener("pointermove",show);svg.addEventListener("pointerleave",hide);
+  bindTip(svg,show,hide);
 }
 
 function checkinCard(){
   const {cut,list}=checkinSessions();
-  if(!list.length)return empty("No check-ins in the last 60 days yet. They're the three questions at the start and end of every practice session.");
+  if(!list.length)return empty("No check-ins in the last 60 days yet. They're the three questions at the start of your first session of the day and when you check out.");
   const both=list.filter(s=>s.start&&s.end&&s.start.hq!=null&&s.end.hq!=null);
   const bAvg=avgN(list.filter(s=>s.start&&s.start.hq!=null).map(s=>s.start.hq)),aAvg=avgN(list.filter(s=>s.end&&s.end.hq!=null).map(s=>s.end.hq));
   const ch=avgN(both.map(s=>s.end.hq-s.start.hq)),lower=both.filter(s=>s.end.hq<s.start.hq).length;
   const yes=(w,k)=>{const xs=list.map(s=>s[w]).filter(x=>x&&x[k]);return [xs.filter(x=>x[k]==="yes").length,xs.length]};
   const line=(k,lab)=>{const [b,bn]=yes("start",k),[a,an]=yes("end",k);return `${lab}: yes ${b} of ${bn} before · ${a} of ${an} after.`};
   let verdict="";
-  if(both.length>=3)verdict=ch>=0.3?"Practice tends to leave you happier than when you started.":ch<=-0.3?"Practice tends to leave you a bit lower than when you started. Worth a look at which sessions do it.":"Practice doesn't change your happiness much either way.";
-  else verdict="A pattern shows after a few sessions with both check-ins.";
+  if(both.length>=3)verdict=ch>=0.3?"Practice tends to leave you happier than when you started.":ch<=-0.3?"Practice tends to leave you a bit lower than when you started. Worth a look at which days do it.":"Practice doesn't change your happiness much either way.";
+  else verdict="A pattern shows after a few days with both a check-in and a check-out.";
   const t0=new Date(cut+"T00:00").getTime(),t1=new Date(Store.today()+"T00:00").getTime()+864e5;
   charts.push({kind:"ci",id:"iCI",list,t0,t1});
   return `<div class="i-key" aria-label="How to read this chart">
-      <div><span><i style="background:var(--s1)"></i>Before practice</span><span><i style="background:var(--s2)"></i>After practice</span></div>
+      <div><span><i style="background:var(--s1)"></i>Before practice (check-in)</span><span><i style="background:var(--s2)"></i>After practice (check-out)</span></div>
       <div class="i-k2"><svg width="16" height="22" viewBox="0 0 16 22" aria-hidden="true"><line x1="8" x2="8" y1="16" y2="6" class="i-link"/><circle cx="8" cy="16" r="4" fill="var(--s1)"/><circle cx="8" cy="6" r="4" fill="var(--s2)"/></svg><span>Orange above blue: you finished happier</span></div>
-      <div class="i-k2"><svg width="16" height="22" viewBox="0 0 16 22" aria-hidden="true"><line x1="8" x2="8" y1="6" y2="16" class="i-link"/><circle cx="8" cy="6" r="4" fill="var(--s1)"/><circle cx="8" cy="16" r="4" fill="var(--s2)"/></svg><span>Orange below blue: the session left you lower</span></div>
+      <div class="i-k2"><svg width="16" height="22" viewBox="0 0 16 22" aria-hidden="true"><line x1="8" x2="8" y1="6" y2="16" class="i-link"/><circle cx="8" cy="6" r="4" fill="var(--s1)"/><circle cx="8" cy="16" r="4" fill="var(--s2)"/></svg><span>Orange below blue: the day's practice left you lower</span></div>
       <div><svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><circle cx="7" cy="7" r="4.5" fill="var(--s1)"/></svg><span>Filled dot = Yes</span><svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><circle cx="7" cy="7" r="3.5" fill="var(--panel)" stroke="var(--s1)" stroke-width="1.75"/></svg><span>Ring = No</span></div>
-      <p class="hint">Each column is one session, oldest on the left. For "Golf in the way of real life?", Yes is the one to watch. Tap any session to see all its answers.</p></div>
-    <div class="i-chart" id="iCI" role="img" aria-label="Check-in answers before and after ${list.length} practice sessions over the last ${CI_DAYS} days"></div>
+      <p class="hint">Each column is one practice day, oldest on the left. For "Golf in the way of real life?", Yes is the one to watch. Tap any day to see all its answers; they stay until you tap somewhere else.</p></div>
+    <div class="i-chart" id="iCI" role="img" aria-label="Check-in answers before and after practice on ${list.length} days over the last ${CI_DAYS} days"></div>
     <div class="stats i-stats">
       <div class="stat"><div class="label">Before</div><div class="v">${bAvg==null?"—":bAvg.toFixed(1)}</div><div class="hint">avg happiness</div></div>
       <div class="stat"><div class="label">After</div><div class="v">${aAvg==null?"—":aAvg.toFixed(1)}</div><div class="hint">avg happiness</div></div>
-      <div class="stat"><div class="label">Change</div><div class="v">${ch==null?"—":sgnF(ch)}</div><div class="hint">per session</div></div>
-      <div class="stat"><div class="label">Lower after</div><div class="v">${both.length?lower+" of "+both.length:"—"}</div><div class="hint">sessions</div></div></div>
+      <div class="stat"><div class="label">Change</div><div class="v">${ch==null?"—":sgnF(ch)}</div><div class="hint">per day</div></div>
+      <div class="stat"><div class="label">Lower after</div><div class="v">${both.length?lower+" of "+both.length:"—"}</div><div class="hint">days</div></div></div>
     <p class="hint"><b>${esc(verdict)}</b> ${esc(line("fun","Having fun"))} ${esc(line("life","Golf in the way of real life"))}</p>`
     +table(["Date","Happy before","Happy after","Fun before","Fun after","Life before","Life after"],[...list].reverse().map(s=>{const b=s.start||{},a=s.end||{};
       return [short(s.date),b.hq??"—",a.hq??"—",yn(b.fun),yn(a.fun),yn(b.life),yn(a.life)]}));
@@ -294,7 +303,7 @@ function drawBars(c){
   const show=e=>{const r=svg.getBoundingClientRect(),i=Math.max(0,Math.min(n-1,Math.floor((e.clientX-r.left-L)/slot))),w=c.weeks[i];
     tipEl.innerHTML=`<b>Week of ${esc(short(w.of))}</b>`+DISC.map(([d,col])=>`<span><i style="background:var(${col})"></i>${esc(d)} <em>${hm(w.by[d]||0)}</em></span>`).join("")+`<span>Total <em>${hm(w.total)}</em></span>`;
     tipEl.hidden=false;const tw=tipEl.offsetWidth;tipEl.style.left=Math.max(0,Math.min(W-tw,X(i)-tw/2))+"px"};
-  svg.addEventListener("pointerdown",show);svg.addEventListener("pointermove",show);svg.addEventListener("pointerleave",()=>tipEl.hidden=true);
+  bindTip(svg,show,()=>{tipEl.hidden=true});
 }
 function timeCard(){
   const log=(Store.get("practiceLog",[])||[]).filter(x=>x&&x.date&&x.min>0);
@@ -314,7 +323,7 @@ function timeCard(){
 /* games: one chart per variant (picked), each result plus the 12-game average to beat */
 function gamesCard(){
   const M=window.PracticeMeta;if(!M)return "";
-  const done=(Store.get("games",[])||[]).filter(g=>g&&g.status==="done"&&M.has(g.game)&&typeof g.result==="number").sort((a,b)=>(a.finishedAt||0)-(b.finishedAt||0));
+  const done=(Store.get("games",[])||[]).filter(g=>g&&g.status==="done"&&!g.short&&M.has(g.game)&&typeof g.result==="number").sort((a,b)=>(a.finishedAt||0)-(b.finishedAt||0));
   if(!done.length)return empty("Finish a game and its results show here over time.");
   const vars={};done.forEach(g=>{(vars[g.variant]=vars[g.variant]||{k:g.game,v:g.variant,setup:g.setup,list:[]}).list.push(g)});
   const order=Object.values(vars).sort((a,b)=>b.list[b.list.length-1].finishedAt-a.list[a.list.length-1].finishedAt);
@@ -334,7 +343,7 @@ function gamesCard(){
 /* routines: each scored step as % over time; the putting spiral's farthest distance gets its own chart */
 function routinesCard(){
   const rt=typeof Sessions!=="undefined"&&Sessions.routineTitle?Sessions.routineTitle:k=>k;
-  const log=(Store.get("practiceLog",[])||[]).filter(x=>x&&x.routine&&Array.isArray(x.results)&&x.results.length);
+  const log=(Store.get("practiceLog",[])||[]).filter(x=>x&&x.routine&&!x.short&&Array.isArray(x.results)&&x.results.length);
   if(!log.length)return empty("Finish a routine with scored steps (Center Strike / Startline, Face Control / Tempo or Technical Putting) and its scores show here.");
   const by={};log.forEach(x=>(by[x.routine]=by[x.routine]||[]).push(x));
   const keys=Object.keys(by).sort((a,b)=>by[b][by[b].length-1].date.localeCompare(by[a][by[a].length-1].date));
@@ -366,7 +375,7 @@ function routinesCard(){
 }
 
 function practice(){
-  return `<section class="panel i-card"><h2>How Practice Feels</h2><p class="hint">Your three check-in answers before and after each session, last ${CI_DAYS} days.</p>${checkinCard()}</section>
+  return `<section class="panel i-card"><h2>How Practice Feels</h2><p class="hint">Your three check-in answers at the start of each practice day and when you check out, last ${CI_DAYS} days.</p>${checkinCard()}</section>
   <section class="panel i-card"><h2>Practice Time</h2><p class="hint">Minutes per week by discipline, last 8 weeks, including games played on their own.</p>${timeCard()}</section>
   <section class="panel i-card"><h2>Games</h2>${gamesCard()}</section>
   <section class="panel i-card"><h2>Routines</h2>${routinesCard()}</section>`;
@@ -376,7 +385,7 @@ function render(){
   charts.length=0;
   const tog=`<div class="seg i-view" role="group" aria-label="Insights for">${[["course","Course"],["practice","Practice"]].map(([k,l])=>`<button data-view="${k}" aria-pressed="${k===view}">${l}</button>`).join("")}</div>`;
   root.innerHTML=`<header><h1>Insights</h1></header>${tog}${view==="practice"?practice():course()}`;
-  charts.forEach(draw);
+  charts.forEach(draw);lastW=root.clientWidth;
 }
 root.addEventListener("click",e=>{const v=e.target.closest("[data-view]");if(v){view=v.dataset.view;Store.set("insightsView",view);render();return}
   const gp=e.target.closest("[data-gpick]");if(gp){gamePick=gp.dataset.gpick;render();return}
@@ -385,6 +394,7 @@ root.addEventListener("click",e=>{const v=e.target.closest("[data-view]");if(v){
   const b=e.target.closest("[data-range]");if(!b)return;range=b.dataset.range;Store.set("insightsRange",range);render()});
 const showing=()=>location.hash.slice(1).split("/")[0]==="insights";
 window.addEventListener("hashchange",()=>{if(showing())render()});
-let rt;window.addEventListener("resize",()=>{clearTimeout(rt);rt=setTimeout(()=>{if(showing())charts.forEach(draw)},150)});
+/* Redraw only when the width really changes (scrolling on a phone resizes the window as the address bar hides). */
+let rt,lastW=0;window.addEventListener("resize",()=>{clearTimeout(rt);rt=setTimeout(()=>{const w=root.clientWidth;if(showing()&&w&&w!==lastW){lastW=w;charts.forEach(draw)}},150)});
 if(showing())render();
 })();

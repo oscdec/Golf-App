@@ -513,3 +513,34 @@ button,.ghost,.r-opt,.p-btn,.r-back,.r-name,.s-name,.r-title,summary,h2,h3,.seg 
 .s-alrow [aria-pressed="false"]{color:var(--muted)}
 @keyframes s-alin{from{transform:translateY(20px);opacity:0}}
 @media (prefers-reduced-motion:reduce){.s-alarm{animation:none}}
+
+/* Nov 18: section clock at the top, once-a-day check-out, shortened, past sessions, editing */
+.s-tot.four{grid-template-columns:repeat(4,minmax(0,1fr))}
+@media (max-width:520px){.s-tot.four{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.s-stepmin{margin:-4px 0 0;font:600 .72rem/1.4 var(--f-body);text-transform:uppercase;letter-spacing:.09em;color:var(--muted)}
+.s-cocard{display:grid;gap:10px;border-color:var(--done)}
+.s-short{display:grid;gap:6px;border-top:1px solid var(--line);padding-top:12px}
+.s-short .r-opt{justify-self:start}
+.s-short .hint{margin:0;font-size:.85rem}
+.s-shortpill{font:600 .66rem/1 var(--f-body);font-style:normal;text-transform:uppercase;letter-spacing:.08em;color:var(--down);border:1px solid var(--down);border-radius:999px;padding:2px 6px;vertical-align:2px}
+.s-past{display:grid;gap:10px}
+.s-past summary{cursor:pointer}
+.s-past .hint{margin:0}
+.s-edblk{display:grid;gap:12px}
+.s-edblk h2{margin:0;font:700 1.3rem/1.1 var(--f-display);text-transform:uppercase}
+.s-edres{display:grid;gap:8px;border-top:1px solid var(--line);padding-top:10px}
+.s-edseq{display:grid;gap:6px;padding:6px 0}
+.s-edseq b{font:600 .9rem var(--f-body)}
+.s-edblk .r-two{align-items:end}
+.g-edit{display:grid;gap:4px}
+.g-row{display:grid;grid-template-columns:minmax(0,9.5em) 1fr auto;gap:10px;align-items:center;padding:6px 0;border-bottom:1px solid var(--line)}
+.g-row.empty .g-lab{color:var(--muted)}
+.g-lab{font:600 .92rem/1.25 var(--f-body)}
+.g-lab b{display:inline-block;min-width:1.8em;font:600 .8rem var(--f-mono);color:var(--muted)}
+.g-sel,.g-num{min-height:42px;padding:6px 8px;width:100%}
+.g-two{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.g-three{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px}
+@media (max-width:520px){.g-row{grid-template-columns:1fr auto}.g-row>.g-lab{grid-column:1/-1}}
+.s-later{display:grid;gap:10px}
+.s-later .hint{margin:0}
+.s-later .ghost{justify-self:start}

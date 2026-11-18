@@ -122,7 +122,7 @@ function setup(){
 }
 function tagPicker(sel){
   const chips=tags.map(t=>`<button class="r-tag" data-act="tag" data-tag="${esc(t)}" aria-pressed="${sel.includes(t)}">${esc(t)}</button>`).join("");
-  return `<div class="r-tags">${chips}</div><div class="r-addtag"><input class="r-input" maxlength="40" placeholder="New feel, e.g. quiet hands" aria-label="New feel tag"><button class="ghost" data-act="addtag">Add</button></div>`;
+  return `<div class="r-tags">${chips}</div><div class="r-addtag"><input class="r-input" maxlength="40" spellcheck="false" placeholder="New feel, e.g. quiet hands" aria-label="New feel tag"><button class="ghost" data-act="addtag">Add</button></div>`;
 }
 
 /* ---------- hole entry ---------- */
@@ -158,7 +158,7 @@ function play(r,editing){
 /* ---------- finish ---------- */
 function finish(r){
   const miss=r.holes.map((h,i)=>holeDone(h)?null:i).filter(x=>x!=null);
-  const best=[0,1,2].map(k=>`<label class="r-best"><span>${k+1}</span><textarea class="r-input" rows="2" data-best="${k}" maxlength="200" placeholder="${["e.g. 7-iron to 6 feet on 14","e.g. Flop over the bunker on 6","e.g. 30-footer that dropped on 18"][k]}">${esc((r.best||[])[k]||"")}</textarea></label>`).join("");
+  const best=[0,1,2].map(k=>`<label class="r-best"><span>${k+1}</span><textarea class="r-input" rows="2" data-best="${k}" spellcheck="false" autocapitalize="sentences" maxlength="200" placeholder="${["e.g. 7-iron to 6 feet on 14","e.g. Flop over the bunker on 6","e.g. 30-footer that dropped on 18"][k]}">${esc((r.best||[])[k]||"")}</textarea></label>`).join("");
   return `${back("play","Hole 18")}<header><h1>Wrap up</h1></header>
   ${miss.length?`<section class="panel r-warn"><b>No score yet on hole${miss.length>1?"s":""} ${miss.map(i=>i+1).join(", ")}.</b>
     <div class="r-opts">${miss.slice(0,9).map(i=>`<button class="r-opt" data-act="jump" data-h="${i}">Hole ${i+1}</button>`).join("")}</div></section>`:""}
@@ -241,8 +241,8 @@ function teeForm(key){
   return `${back(returnTo||"courses",returnTo==="new"?"New round":"Courses")}<header><h1>${title}</h1></header>
   <div class="panel r-warn" id="rErr" hidden></div>
   <section class="panel r-form">
-    <div class="r-field"><label class="label" for="fName">Course name</label><input class="r-input" id="fName" data-f="name" value="${esc(f.name)}" maxlength="60" ${f.cid&&!f.tid?"readonly":""}></div>
-    <div class="r-field"><label class="label" for="fTee">Tees</label><input class="r-input" id="fTee" data-f="tee" value="${esc(f.tee)}" maxlength="30" placeholder="e.g. Blue"></div>
+    <div class="r-field"><label class="label" for="fName">Course name</label><input class="r-input" id="fName" data-f="name" spellcheck="false" value="${esc(f.name)}" maxlength="60" ${f.cid&&!f.tid?"readonly":""}></div>
+    <div class="r-field"><label class="label" for="fTee">Tees</label><input class="r-input" id="fTee" data-f="tee" spellcheck="false" value="${esc(f.tee)}" maxlength="30" placeholder="e.g. Blue"></div>
     <div class="r-two">
       <div class="r-field"><label class="label" for="fRating">Course rating</label><input class="r-input" id="fRating" data-f="rating" inputmode="decimal" value="${esc(f.rating)}" placeholder="e.g. 71.4"></div>
       <div class="r-field"><label class="label" for="fSlope">Slope</label><input class="r-input" id="fSlope" data-f="slope" inputmode="numeric" value="${esc(f.slope)}" placeholder="e.g. 131"></div>
@@ -282,7 +282,7 @@ function tagScreen(){
   return `${back("","Rounds")}<header><h1>Feel tags</h1></header>
   <section class="panel r-form"><p class="hint">Short names for the swing feels you play with. Pick them when you start or finish a round, so Insights can compare them with your scores.</p>
   ${tags.map(t=>`<div class="r-teerow"><span>${esc(t)}</span><button class="ghost sm" data-act="deltag" data-tag="${esc(t)}">Remove</button></div>`).join("")||`<p class="hint">No tags yet.</p>`}
-  <div class="r-addtag"><input class="r-input" maxlength="40" placeholder="New feel, e.g. quiet hands" aria-label="New feel tag"><button class="ghost" data-act="addtag">Add</button></div>
+  <div class="r-addtag"><input class="r-input" maxlength="40" spellcheck="false" placeholder="New feel, e.g. quiet hands" aria-label="New feel tag"><button class="ghost" data-act="addtag">Add</button></div>
   <p class="hint">Removing a tag keeps it on rounds that already used it.</p></section>`;
 }
 function pastScreen(){

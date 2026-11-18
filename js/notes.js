@@ -23,7 +23,7 @@ const Notes=(()=>{
       <button class="ghost sm" data-act="restore" data-a="${a}" data-i="${i}">Put back in the box</button></li>`).join("");
     return `<section class="panel n-card" data-a="${a}">
       <div class="n-top"><h2 id="n-${a}">${esc(label)}</h2><span class="hint" data-edited="${a}">${data.edited[a]&&get(a)?"Edited "+esc(when(data.edited[a])):""}</span></div>
-      <textarea class="r-input n-box" data-a="${a}" aria-labelledby="n-${a}" placeholder="Feels and cues for ${esc(label.toLowerCase())}…">${esc(get(a))}</textarea>
+      <textarea class="r-input n-box" data-a="${a}" spellcheck="false" autocapitalize="sentences" aria-labelledby="n-${a}" placeholder="Feels and cues for ${esc(label.toLowerCase())}…">${esc(get(a))}</textarea>
       ${u?`<div class="n-undo" role="status"><span>Saved to Previous notes and cleared.</span><button class="ghost sm" data-act="undo" data-a="${a}">Undo</button></div>`:""}
       <div class="row n-acts"><button class="ghost" data-act="update" data-a="${a}">Update</button>
         <button class="ghost" data-act="prev" data-a="${a}" aria-expanded="${open.has(a)}"${h.length?"":" disabled"}>Previous notes${h.length?` (${h.length})`:""}</button></div>

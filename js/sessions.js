@@ -60,6 +60,7 @@ function ensureSeq(b,i,st){b.seq=b.seq||{};if(!b.seq[i]){b.seq[i]={shots:makeSeq
 function seqStats(q,sq){const rows=q.speeds.map(sp=>{let n=0,l=0,w=0;(sq?sq.shots:[]).forEach((x,k)=>{const r=sq.res[k];if(x.sp===sp&&r){n++;if(r.l)l++;if(r.w)w++}});return [sp,l,w,n]});
   return {rows,line:rows.reduce((t,r)=>t+r[1],0),win:rows.reduce((t,r)=>t+r[2],0),n:rows.reduce((t,r)=>t+r[3],0)}}
 const rTitle=id=>ROUTINES[id]?ROUTINES[id].title:"";
+const logTitle=x=>{const s=SESS[x.s];if(!s)return x.title||"";const r=x.routine&&rTitle(x.routine);return s.title+(r&&r!==s.title?" · "+r:"")};
 const SLOTS=[["mon","Monday","Mon"],["tue","Tuesday","Tue"],["wed","Wednesday","Wed"],["thu","Thursday","Thu"],["fri","Friday","Fri"],["wknd","Weekend · Sat or Sun","Weekend"]];
 const DEFAULT={mon:[],tue:["striking"],wed:["techchip","techputt"],thu:["bscombine","wedgecombine"],fri:["chipgame","puttgame"],wknd:["wedge2","freestyle"]};
 let P={go(){},render(){},launch(){},gameName:k=>k,gameSub:()=>"",gameRow:()=>""};
@@ -168,9 +169,10 @@ const clock=ms=>{const t=Math.floor(Math.abs(ms)/1000),h=Math.floor(t/3600),m=Ma
 function start(ids,label){
   if(run){P.go("run");return}
   ids=ids.filter(id=>SESS[id]);if(!ids.length)return;
-  /* The clock waits until the start check-in is answered. */
-  run={id:Store.uid(),label,date:Store.today(),startedAt:Date.now(),acc:0,since:null,i:0,ci:{start:null,end:null},cd:{},
-    blocks:ids.map(id=>({s:id,min:SESS[id].min,at:0,games:[],...(SESS[id].routines&&SESS[id].routines.length===1?{r:SESS[id].routines[0],st:0,tally:{}}:{})}))};
+  /* The check-in is once a day: the first session of the day asks before the clock starts; later ones start right away. */
+  const asked=!!dayCI(Store.today()).start;
+  run={id:Store.uid(),label,date:Store.today(),startedAt:Date.now(),acc:0,since:asked?Date.now():null,i:0,ci:{start:asked?"day":null,end:null},cd:{},
+    blocks:ids.map(id=>({s:id,min:SESS[id].min,at:0,games:[],...(SESS[id].routines&&SESS[id].routines.length===1?{r:SESS[id].routines[0],st:0,stAt:0,tally:{}}:{})}))};
   saveRun();P.go("run");
 }
 function addGame(gameId){if(!run)return;const b=blk();if(!b.games.includes(gameId)){b.games.push(gameId);saveRun()}}
@@ -185,29 +187,61 @@ function homeCard(){
     <div class="r-title">${esc(run.label)}<small>${esc(s.title)} · <span data-clock="block"></span> <span data-clock="blocklbl">left</span> · practiced <span data-clock="elapsed"></span></small></div>
     <div class="row"><a class="play" href="#practice/run">Open Session</a></div></section>`;
 }
-/* ---------- check-in at the start and end of every practice session ---------- */
+/* ---------- check-in: once a day ----------
+   The first session of the day asks the three questions before the clock starts. At the end of every session you either
+   check out for the day (the same three questions) or leave it for later; until you check out, the Practice home offers it.
+   rg.checkins keeps one entry per answer: {run,date,when:"start"|"end",fun,life,hq,at}. A day's check-in is its first
+   start and its last end. */
 const CI_Q=[["fun","Are You Having Fun?","yn"],["life","Is Golf Getting In The Way Of Real Life?","yn"],["hq","What's Your Happiness Quotient?","n10"]];
 const inCheck=()=>!!(run&&run.ci&&(!run.ci.start||run.ending));
-function checkinView(){
-  const kind=run.ending?"end":"start",d=run.cd||{},ready=CI_Q.every(([k])=>d[k]!=null);
-  const q=CI_Q.map(([k,label,t])=>`<div class="r-field s-ci"><div class="s-ciq">${esc(label)}</div>
-    ${t==="yn"?`<div class="r-opts">${[["yes","Yes"],["no","No"]].map(([v,l])=>`<button class="r-opt" data-act="ci" data-q="${k}" data-v="${v}" aria-pressed="${d[k]===v}">${l}</button>`).join("")}</div>`
-      :`<div class="r-nums s-hq">${Array.from({length:10},(_,n)=>`<button class="r-num" data-act="ci" data-q="${k}" data-v="${n+1}" aria-pressed="${d[k]===n+1}">${n+1}</button>`).join("")}</div>`}</div>`).join("");
-  return `<a class="r-back" href="#practice">‹ Practice</a>
-  <header><h1>${kind==="start"?"Before You Start":"Before You Finish"}</h1><p class="sub">${esc(run.label)} · quick check-in${kind==="start"?". The clock starts when you're done.":"."}</p></header>
-  <section class="panel s-cis">${q}</section>
-  <div class="row"><button class="play" data-act="${kind==="start"?"cistart":"ciend"}"${ready?"":" disabled"}>${kind==="start"?"Start Practice":"Finish Practice"}</button>
-    <button class="ghost danger" data-act="discardrun">Discard</button></div>`;
+function dayCI(date){const c=Store.get("checkins",[]).filter(x=>x&&x.date===date);
+  const st=c.filter(x=>x.when==="start").sort((a,b)=>a.at-b.at),en=c.filter(x=>x.when==="end").sort((a,b)=>a.at-b.at);
+  return {start:st[0]||null,end:en[en.length-1]||null}}
+function ciQuestions(d,act){
+  return CI_Q.map(([k,label,t])=>`<div class="r-field s-ci"><div class="s-ciq">${esc(label)}</div>
+    ${t==="yn"?`<div class="r-opts">${[["yes","Yes"],["no","No"]].map(([v,l])=>`<button class="r-opt" data-act="${act}" data-q="${k}" data-v="${v}" aria-pressed="${d[k]===v}">${l}</button>`).join("")}</div>`
+      :`<div class="r-nums s-hq">${Array.from({length:10},(_,n)=>`<button class="r-num" data-act="${act}" data-q="${k}" data-v="${n+1}" aria-pressed="${d[k]===n+1}">${n+1}</button>`).join("")}</div>`}</div>`).join("");
 }
-function ciSummary(id){
-  const c=Store.get("checkins",[]).filter(x=>x.run===id),s=c.find(x=>x.when==="start"),e=c.find(x=>x.when==="end");if(!s&&!e)return "";
+const ciReady=d=>CI_Q.every(([k])=>d&&d[k]!=null);
+function checkinView(){
+  const d=run.cd||{},ready=ciReady(d);
+  if(!run.ending)return `<a class="r-back" href="#practice">‹ Practice</a>
+  <header><h1>Before You Start</h1><p class="sub">${esc(run.label)} · today's check-in, once a day. The clock starts when you're done.</p></header>
+  <section class="panel s-cis">${ciQuestions(d,"ci")}</section>
+  <div class="row"><button class="play" data-act="cistart"${ready?"":" disabled"}>Start Practice</button>
+    <button class="ghost danger" data-act="discardrun">Discard</button></div>`;
+  const out=dayCI(Store.today()).end;
+  return `<header><h1>Done For Today?</h1><p class="sub">${esc(run.label)} is finished. If this is your last practice today, check out with the same three questions below.</p></header>
+  <section class="panel s-later"><p class="hint">Might practice again later today? Skip the questions for now; the Practice home will offer them when you're done.</p><button class="ghost" data-act="cilater">More Practice Later</button></section>
+  <section class="panel s-cis">${ciQuestions(d,"ci")}
+    <button class="play" data-act="ciend"${ready?"":" disabled"}>Check Out For Today</button>
+    ${out?`<p class="hint">You checked out at ${esc(new Date(out.at).toLocaleTimeString([],{hour:"numeric",minute:"2-digit"}))}; checking out again replaces it.</p>`:""}</section>
+  <div class="row"><button class="ghost danger" data-act="discardrun">Discard Session</button></div>`;
+}
+/* The Practice home's "Done for today?" card: today has a start check-in, no check-out yet, and no session running. */
+function checkoutCard(){
+  if(run)return "";const d=dayCI(Store.today());if(!d.start||d.end)return "";
+  return `<section class="panel s-cocard"><div class="r-title">Done For Today?<small>You checked in at ${esc(new Date(d.start.at).toLocaleTimeString([],{hour:"numeric",minute:"2-digit"}))}. Check out with the same three questions when you've finished practicing.</small></div>
+    <div class="row"><a class="play" href="#practice/checkout">Check Out</a></div></section>`;
+}
+let coDraft={};
+function checkoutView(){
+  const d=dayCI(Store.today());if(!d.start)return null;
+  return `<a class="r-back" href="#practice">‹ Practice</a>
+  <header><h1>Check Out For Today</h1><p class="sub">How did today's practice leave you?</p></header>
+  <section class="panel s-cis">${ciQuestions(coDraft,"co")}</section>
+  <div class="row"><button class="play" data-act="cosave"${ciReady(coDraft)?"":" disabled"}>Check Out</button></div>`;
+}
+function ciSummary(date){
+  const {start:s,end:e}=dayCI(date);if(!s&&!e)return "";
   const v=(x,k)=>!x?"—":k==="hq"?x.hq:x[k]==="yes"?"Yes":"No";
-  return `<div class="label">Check-In</div><table class="p-bench"><tr class="hd"><th></th><td>Start</td><td>End</td></tr>
-    ${CI_Q.map(([k,l])=>`<tr><th>${esc(l.replace(/\?$/,""))}</th><td>${v(s,k)}</td><td>${v(e,k)}</td></tr>`).join("")}</table>`;
+  return `<div class="label">${date===Store.today()?"Today's":"That Day's"} Check-In</div><table class="p-bench"><tr class="hd"><th></th><td>Start</td><td>Check-Out</td></tr>
+    ${CI_Q.map(([k,l])=>`<tr><th>${esc(l.replace(/\?$/,""))}</th><td>${v(s,k)}</td><td>${v(e,k)}</td></tr>`).join("")}</table>
+    ${e?"":`<p class="hint">No check-out yet${date===Store.today()?": the Practice home offers it when you're done for the day":""}.</p>`}`;
 }
 function saveCheckins(){
   if(!run.ci)return;const c=Store.get("checkins",[]);
-  ["start","end"].forEach(w=>{const a=run.ci[w];if(a)c.push({run:run.id,date:run.date,when:w,fun:a.fun,life:a.life,hq:a.hq,at:a.at})});
+  ["start","end"].forEach(w=>{const a=run.ci[w];if(a&&typeof a==="object")c.push({run:run.id,date:run.date,when:w,fun:a.fun,life:a.life,hq:a.hq,at:a.at})});
   Store.set("checkins",c);
 }
 
@@ -215,6 +249,7 @@ function runView(){
   if(!run)return null;
   if(inCheck())return checkinView();
   const b=blk(),s=SESS[b.s],last=run.i===run.blocks.length-1,paused=!run.since;
+  const stepNow=b.r&&ROUTINES[b.r]&&ROUTINES[b.r].steps?ROUTINES[b.r].steps[b.st||0]:null;
   const games=gamesOf(s).map(g=>`<button class="r-row p-game" data-act="launch" data-k="${g.k}" data-o="${esc(JSON.stringify(g.o||{}))}"><span class="r-name">${esc(P.gameName(g.k,g.o))}<small>${esc(P.gameSub(g.k))}</small></span><span class="p-go">›</span></button>`).join("");
   const played=b.games.map(P.gameRow).join("");
   const notes=(s.notes||[]).map(a=>{const t=typeof Notes!=="undefined"?Notes.get(a):"";
@@ -224,12 +259,14 @@ function runView(){
   return `<a class="r-back" href="#practice">‹ Practice</a>
   <header><h1>${esc(run.label)}</h1><p class="sub">${run.blocks.length>1?`Block ${run.i+1} of ${run.blocks.length} · `:""}${esc(s.disc.replace(/\b\w/g,c=>c.toUpperCase()))} · ${esc(s.where)}</p></header>
   <section class="panel s-clock">
-    <div class="s-big"><div class="label">${esc(s.title)} · <span data-clock="blocklbl">left</span></div><div class="clock" data-clock="block">0:00</div><div class="p-bar"><i data-clock="bar"></i></div></div>
-    <div class="s-tot"><div><div class="label">Practiced</div><div class="v" data-clock="elapsed">0:00</div></div>
+    ${stepNow?`<div class="s-big"><div class="label">${esc(stepNow.name)} · <span data-clock="steplbl">left</span></div><div class="clock" data-clock="step">0:00</div><div class="p-bar"><i data-clock="stepbar"></i></div></div>`
+      :`<div class="s-big"><div class="label">${esc(s.title)} · <span data-clock="blocklbl">left</span></div><div class="clock" data-clock="block">0:00</div><div class="p-bar"><i data-clock="bar"></i></div></div>`}
+    <div class="s-tot${stepNow?" four":""}">${stepNow?`<div><div class="label" data-clock="blockhd">Block Left</div><div class="v" data-clock="block">0:00</div></div>`:""}
+      <div><div class="label">Practiced</div><div class="v" data-clock="elapsed">0:00</div></div>
       <div><div class="label" data-clock="leftlbl">Left In Session</div><div class="v" data-clock="left">0:00</div></div>
       <div><div class="label">Planned</div><div class="v">${clock(planned())}</div></div></div>
     ${paused?`<p class="s-paused">Paused. The clocks are stopped.</p>`:""}
-    <div class="s-alrow"><span class="hint">Alarm at the end of each section · rises to your media volume</span>
+    <div class="s-alrow"><span class="hint">Alarm at the end of each section · rises to your media volume · works with the screen locked</span>
       <button class="ghost sm" data-act="altest">Test</button><button class="ghost sm" data-act="altoggle" aria-pressed="${alarmOn()}">${alarmOn()?"Alarm On":"Alarm Off"}</button></div>
   </section>
   <div class="row s-ctl"><button class="play" data-act="next">${last?"Finish Session":"Finish Block"}</button>
@@ -261,15 +298,16 @@ function routinePanel(s,b){
     return `<li class="${k<i?"done":k===i?"cur":""}"><span>${esc(x.name)}</span><small>${x.min} min${t}</small></li>`}).join("");
   return `<section class="panel s-what s-routine">
     <div class="s-rhd"><div class="label">${esc(r.title)} · step ${i+1} of ${n}</div>${change}</div>
-    <h2 class="s-stepname">${esc(st.name)}</h2>
-    <div class="s-stepclock"><span data-clock="step">${st.min}:00</span><small data-clock="steplbl">Left In Step</small></div>
+    <h2 class="s-stepname">${esc(st.name)}</h2><p class="s-stepmin">${st.min} min · its clock is at the top</p>
     ${st.items?`<ul class="s-items">${st.items.map(x=>`<li>${esc(x)}</li>`).join("")}</ul>`:""}
     ${st.prompt?`<p class="s-prompt">${esc(st.prompt)}</p>`:""}${st.tip?`<p class="hint">${esc(st.tip)}</p>`:""}${st.note?`<p class="hint">${esc(st.note)}</p>`:""}
     ${st.seq?seqHtml(b,i,st):""}${tally}${pass}${st.pick?(()=>{const v=(b.pick||{})[i];return `<div class="r-field s-pick"><div class="label">${esc(st.pick.label)}</div>
       <div class="r-opts">${st.pick.opts.map(o=>`<button class="r-opt" data-act="pick" data-i="${i}" data-v="${o}" aria-pressed="${v===o}">${o} ${esc(st.pick.unit)}</button>`).join("")}</div>
       ${v===st.pick.opts[st.pick.opts.length-1]?`<p class="s-pass ok">✓ Whole spiral done: you can finish.</p>`:""}</div>`})():""}
     <div class="row">${i>0?`<button class="ghost" data-act="step" data-v="-1">‹ Back A Step</button>`:""}${i<n-1?`<button class="play" data-act="step" data-v="1">Next: ${esc(r.steps[i+1].name)}</button>`:""}</div>
-    <ol class="s-steps">${list}</ol></section>`;
+    <ol class="s-steps">${list}</ol>
+    <div class="s-short"><button class="r-opt" data-act="rshort" aria-pressed="${!!b.short}">${b.short?"✓ Shortened":"Mark As Shortened"}</button>
+      <span class="hint">${b.short?"This routine won't count toward your routine stats in Insights. Its minutes still count.":"Couldn't do the full number of shots? Mark it shortened so it stays out of your routine stats."}</span></div></section>`;
 }
 function seqHtml(b,i,st){
   const sq=ensureSeq(b,i,st),k=sq.res.length,tot=sq.shots.length,ss=seqStats(st.seq,sq);
@@ -314,30 +352,117 @@ const Alarm=(()=>{
   document.addEventListener("pointerdown",()=>{if(ctx&&ctx.state==="suspended")ctx.resume().catch(()=>{});else if(!ctx)ac()},{capture:true});
   return {play,cancel};
 })();
+
+/* ---------- lock screen and alarm, through a playing sound ----------
+   Chrome on Android only keeps a page awake with the screen off, and only shows a lock-screen card, while the page is
+   playing sound. So while a session runs, an <audio> element plays a generated clip: a very quiet 40 Hz hum (below what
+   a phone speaker can produce, but enough for Chrome to count it as sound), with the section alarm baked into the samples
+   at the moment the section ends. Clips are made in pieces of up to 5 minutes; when one ends, the next is made. Because
+   the timing lives in the samples, the alarm rings on time with the screen off (the same trick the Tempo tab uses).
+   The lock-screen card (Media Session) shows the section, the block and the time practiced. */
+const SR=8000,HUM_HZ=40,HUM_AMP=0.004,CHIME_SECS=180,PIECE=300;
+function wavURL(pcm){
+  const n=pcm.length,buf=new ArrayBuffer(44+n*2),v=new DataView(buf),w=(o,s)=>{for(let i=0;i<4;i++)v.setUint8(o+i,s.charCodeAt(i))};
+  w(0,"RIFF");v.setUint32(4,36+n*2,true);w(8,"WAVE");w(12,"fmt ");v.setUint32(16,16,true);v.setUint16(20,1,true);v.setUint16(22,1,true);
+  v.setUint32(24,SR,true);v.setUint32(28,SR*2,true);v.setUint16(32,2,true);v.setUint16(34,16,true);w(36,"data");v.setUint32(40,n*2,true);
+  new Int16Array(buf,44).set(pcm);return URL.createObjectURL(new Blob([buf],{type:"audio/wav"}));
+}
+/* One clip: `hum` seconds of hum, then (if chime>0) the alarm for `chime` seconds, rising from quiet to full over `rise`. */
+function makeClip(hum,chime,rise=20,withHum=true){
+  const n=Math.max(SR,Math.round((hum+chime)*SR)),pcm=new Int16Array(n);
+  if(withHum){const per=SR/HUM_HZ,a=HUM_AMP*32767;for(let i=0;i<n;i++)pcm[i]=Math.round(a*Math.sin(2*Math.PI*i/per))}
+  if(chime>0){
+    /* one 1.2 s beep pair: 880 Hz then 1320 Hz, each a quick attack and a short fade */
+    const pat=new Float32Array(Math.round(1.2*SR));
+    [[880,0],[1320,.18]].forEach(([f,d])=>{const s0=Math.round(d*SR),m=Math.round(.3*SR);
+      for(let i=0;i<m&&s0+i<pat.length;i++){const x=i/SR,env=Math.min(1,x/.012)*Math.exp(-x*18);pat[s0+i]+=Math.sin(2*Math.PI*f*x)*env*.9}});
+    const s0=Math.round(hum*SR),lo=Math.log(.04);
+    for(let i=s0;i<n;i++){const t=(i-s0)/SR,g=t>=rise?1:Math.exp(lo*(1-t/rise));
+      pcm[i]=Math.max(-32767,Math.min(32767,pcm[i]+pat[(i-s0)%pat.length]*g*.85*32767))}
+  }
+  return wavURL(pcm);
+}
+const Lock=(()=>{
+  const el=new Audio();el.preload="auto";
+  let url=null,on=false,ok=false;
+  function load(hum,chime){if(url)URL.revokeObjectURL(url);url=makeClip(hum,chime);el.src=url;el.currentTime=0}
+  /* (Re)start the clip for the section running now. Returns false if the browser wouldn't play it (needs a tap). */
+  function play(hum,chime,onFail){load(hum,chime);on=true;
+    const p=el.play();if(p&&p.then)p.then(()=>{ok=true},()=>{ok=false;onFail&&onFail()});else ok=true;}
+  function pause(){if(on){el.pause();on=false}}
+  function stop(){if(!url&&!on)return;el.pause();on=false;ok=false;el.removeAttribute("src");try{el.load()}catch(e){}if(url){URL.revokeObjectURL(url);url=null}
+    try{if(!window.__tempoOn){navigator.mediaSession.metadata=null;navigator.mediaSession.playbackState="none"}}catch(e){}}
+  el.addEventListener("ended",()=>{if(on&&typeof onEnded==="function")onEnded()});
+  el.addEventListener("playing",()=>{ok=true});
+  let onEnded=null;
+  return {play,pause,stop,el,playing:()=>on&&ok&&!el.paused,started:()=>!!url,set onEnded(f){onEnded=f}};
+})();
 const alarmOn=()=>Store.get("settings",{}).alarm!==false;
 let alarmSig="";
 /* The section running now: its key, when it ends (as a clock time), and what "next" does. */
 function section(){
   const b=blk(),r=b.r&&ROUTINES[b.r],last=run.i===run.blocks.length-1,el=elapsed();
   if(r&&r.steps){const i=b.st||0,st=r.steps[i],start=i===0&&b.stAt==null?b.at:(b.stAt||b.at),left=st.min*60000-(el-start);
-    return {key:run.i+":"+i,name:st.name,left,next:i<r.steps.length-1?{act:"step",label:"Next: "+r.steps[i+1].name}:{act:"next",label:last?"Finish Session":"Finish Block"}}}
-  return {key:run.i+":b",name:SESS[b.s].title,left:b.min*60000-(el-b.at),next:{act:"next",label:last?"Finish Session":"Finish Block"}};
+    return {key:run.i+":"+i,name:st.name,left,len:st.min*60000,next:i<r.steps.length-1?{act:"step",label:"Next: "+r.steps[i+1].name}:{act:"next",label:last?"Finish Session":"Finish Block"}}}
+  return {key:run.i+":b",name:SESS[b.s].title,left:b.min*60000-(el-b.at),len:b.min*60000,next:{act:"next",label:last?"Finish Session":"Finish Block"}};
 }
+const alarmMuted=sec=>!alarmOn()||!!(run.alarmOff||{})[sec.key];
+const isRinging=sec=>!!(run&&run.since&&!inCheck()&&!alarmMuted(sec)&&sec.left<=0&&sec.left>-CHIME_SECS*1000);
 function syncAlarm(){
-  if(!run||!run.since||inCheck()||!alarmOn()){if(alarmSig){Alarm.cancel();alarmSig=""}showAlarm(null);return}
-  const sec=section(),off=(run.alarmOff||{})[sec.key];
-  if(off){if(alarmSig){Alarm.cancel();alarmSig=""}showAlarm(null);return}
-  /* Reschedule only when the section changes or its end time moves (pause/resume, step change). */
-  const at=Date.now()+sec.left,[pk,pa]=alarmSig.split("@");
-  if(pk!==sec.key||Math.abs(at-(+pa||0))>2500){Alarm.play(at);alarmSig=sec.key+"@"+at}
-  showAlarm(sec.left<=0?sec:null);
+  if(!run||!run.since||inCheck()){
+    if(alarmSig){Alarm.cancel();alarmSig=""}
+    if(!run)Lock.stop();else Lock.pause();
+    showAlarm(null);if(run&&!inCheck())updateLock();return}
+  const sec=section(),off=alarmMuted(sec);
+  /* Rebuild the clip only when the section changes, its end time moves (pause/resume, step change), or the alarm is
+     switched off or stopped. */
+  const at=Date.now()+sec.left,[pk,pa,po]=alarmSig.split("@");
+  if(pk!==sec.key||Math.abs(at-(+pa||0))>2500||po!==(off?"1":"0")){
+    alarmSig=sec.key+"@"+at+"@"+(off?"1":"0");
+    const left=sec.left/1000;let hum=PIECE,chime=0;
+    if(!off){if(left>PIECE+30)hum=PIECE;else if(left>0){hum=left;chime=CHIME_SECS}else if(-left<CHIME_SECS){hum=0;chime=CHIME_SECS+left}}
+    Alarm.cancel();
+    Lock.play(hum,chime,()=>{if(!off&&chime>0)Alarm.play(at)});
+  }
+  showAlarm(!off&&sec.left<=0?sec:null);updateLock(sec);
+}
+/* Stop the alarm sound for this section (the clock keeps going). */
+function stopSound(){if(!run)return;const sec=section();run.alarmOff=run.alarmOff||{};run.alarmOff[sec.key]=true;Alarm.cancel();saveRun();showAlarm(null);syncAlarm()}
+Lock.onEnded=()=>{alarmSig="";syncAlarm()};
+/* If the sound couldn't start (the browser wants a tap first, e.g. after the app was reopened), the next tap starts it. */
+document.addEventListener("pointerdown",()=>{if(run&&run.since&&!inCheck()&&!Lock.playing()){alarmSig="";setTimeout(syncAlarm,0)}},{capture:true});
+
+/* The lock-screen card: section and its time, the block and its time, and time practiced. */
+let msOwned=false,msKey="";
+function updateLock(sec){
+  if(!("mediaSession" in navigator))return;
+  if(window.__tempoOn){msOwned=false;msKey="";return}
+  if(!run||inCheck()||!Lock.started())return;
+  const ms=navigator.mediaSession;
+  if(!msOwned){msOwned=true;
+    const h=(a,f)=>{try{ms.setActionHandler(a,f)}catch(e){}};
+    h("play",()=>{if(!run)return;if(!run.since)act.pause();else{alarmSig="";syncAlarm()}});
+    h("pause",()=>{if(!run)return;const s=section();if(isRinging(s))stopSound();else if(run.since)act.pause()});
+    ["stop","seekbackward","seekforward","seekto","previoustrack","nexttrack"].forEach(a=>h(a,null))}
+  sec=sec||section();
+  const b=blk(),s=SESS[b.s],el=elapsed(),bl=b.min*60000-(el-b.at),tl=planned()-el,steps=b.r&&ROUTINES[b.r]&&ROUTINES[b.r].steps;
+  const lt=t=>clock(t)+(t>=0?" left":" over");
+  let title=steps?`${sec.name} · ${lt(sec.left)}`:`${s.title} · ${lt(bl)}`;
+  if(isRinging(sec))title=`Time's Up · ${sec.name}`;else if(!run.since)title="Paused · "+title;
+  const artist=steps?`${s.title} ${lt(bl)} · Practiced ${clock(el)}`:`Practiced ${clock(el)} · Session ${lt(tl)}`;
+  const key=title+"|"+artist;
+  if(key!==msKey){msKey=key;
+    try{ms.metadata=new MediaMetadata({title,artist,album:run.label,artwork:[{src:"icons/icon-512.png",sizes:"512x512",type:"image/png"}]})}catch(e){}}
+  try{ms.playbackState=run.since?"playing":"paused";
+    const len=sec.len/1000,pos=len-sec.left/1000;
+    ms.setPositionState?.({duration:Math.max(len,pos,1),position:Math.max(0,Math.min(Math.max(len,pos,1),pos)),playbackRate:1})}catch(e){}
 }
 function showAlarm(sec){
   let bar=document.getElementById("alarmBar");
   if(!sec){if(bar)bar.remove();return}
   if(!bar){bar=document.createElement("div");bar.id="alarmBar";bar.className="s-alarm";bar.setAttribute("role","alert");document.body.appendChild(bar);
     bar.addEventListener("click",e=>{const el=e.target.closest("[data-al]");if(!el||!run)return;e.preventDefault();
-      const sec=section();run.alarmOff=run.alarmOff||{};run.alarmOff[sec.key]=true;Alarm.cancel();alarmSig="";saveRun();showAlarm(null);
+      const sec=section();stopSound();
       if(el.dataset.al==="next"){if(sec.next.act==="step")act.step({dataset:{v:"1"}});else act.next()}
       else P.render()})}
   const html=`<div class="s-almsg"><b>Time's Up</b><span>${esc(sec.name)}</span></div><div class="s-albtns"><button class="ghost" data-al="stop">Stop Sound</button><button class="play" data-al="next">${esc(sec.next.label)}</button></div>`;
@@ -345,16 +470,17 @@ function showAlarm(sec){
 }
 
 function paint(){
-  if(!run){if(alarmSig){Alarm.cancel();alarmSig=""}showAlarm(null);return}
+  if(!run){if(alarmSig){Alarm.cancel();alarmSig=""}Lock.stop();showAlarm(null);return}
   const b=blk(),el=elapsed(),be=el-b.at,bl=b.min*60000-be,tl=planned()-el;
   const set=(k,v)=>document.querySelectorAll(`[data-clock="${k}"]`).forEach(n=>{if(n.textContent!==v)n.textContent=v});
   document.querySelectorAll('[data-clock="weektotal"]').forEach(n=>{const v=hm(+n.dataset.base+el);if(n.textContent!==v)n.textContent=v});
-  set("elapsed",clock(el));set("block",clock(bl));set("blocklbl",bl>=0?"left":"over");
+  set("elapsed",clock(el));set("block",clock(bl));set("blocklbl",bl>=0?"left":"over");set("blockhd",bl>=0?"Block Left":"Block Over");
   set("left",clock(tl));set("leftlbl",tl>=0?"Left In Session":"Over Planned Time");
   document.querySelectorAll('[data-clock="block"]').forEach(n=>n.classList.toggle("over",bl<0));
   document.querySelectorAll('[data-clock="bar"]').forEach(n=>{n.style.width=Math.min(100,be/(b.min*60000)*100)+"%";n.classList.toggle("over",bl<0)});
-  const r=b.r&&ROUTINES[b.r];if(r&&r.steps){const st=r.steps[b.st||0],sl=st.min*60000-(el-(b.stAt||b.at));
-    set("step",clock(sl));set("steplbl",sl>=0?"Left In Step":"Over");document.querySelectorAll('[data-clock="step"]').forEach(n=>n.classList.toggle("over",sl<0))}
+  const r=b.r&&ROUTINES[b.r];if(r&&r.steps){const sec=section(),sl=sec.left;
+    set("step",clock(sl));set("steplbl",sl>=0?"left":"over");document.querySelectorAll('[data-clock="step"]').forEach(n=>n.classList.toggle("over",sl<0));
+    document.querySelectorAll('[data-clock="stepbar"]').forEach(n=>{n.style.width=Math.max(0,Math.min(100,(1-sl/sec.len)*100))+"%";n.classList.toggle("over",sl<0)})}
   if(bl<=0&&!b.buzzed&&run.since){b.buzzed=true;saveRun();try{if(navigator.userActivation?.hasBeenActive)navigator.vibrate?.([200,100,200])}catch(e){}}
   syncAlarm();
 }
@@ -363,11 +489,11 @@ setInterval(paint,1000);
 function logRun(){
   const w=week(),log=Store.get("practiceLog",[]);
   run.blocks.forEach(b=>{if(b.used==null)return;const s=SESS[b.s];
-    log.push({run:run.id,date:run.date,s:b.s,title:s.title+(b.r?" · "+rTitle(b.r):""),disc:s.disc,min:Math.round(b.used/60000),done:!!b.done,games:b.games,
-      ...(b.r?{routine:b.r,results:routineResult(b)}:{})});
+    log.push({run:run.id,date:run.date,s:b.s,title:s.title+(b.r&&rTitle(b.r)!==s.title?" · "+rTitle(b.r):""),disc:s.disc,min:Math.round(b.used/60000),done:!!b.done,games:b.games,
+      ...(b.r?{routine:b.r,results:routineResult(b),...(b.short?{short:true}:{})}:{})});
     if(b.done)w.done[b.s]=Store.today()});
   Store.set("practiceLog",log);saveWeek(w);saveCheckins();
-  const id=run.id;run=null;Store.set("run",null);P.go("sum/"+id,true);
+  const id=run.id;run=null;Store.set("run",null);P.go("sum/"+id+"/new",true);
 }
 function closeBlock(done){const b=blk();b.used=elapsed()-b.at;b.done=done;
   if(run.i>=run.blocks.length-1){if(run.since){run.acc=elapsed();run.since=null}
@@ -375,18 +501,68 @@ function closeBlock(done){const b=blk();b.used=elapsed()-b.at;b.done=done;
     logRun();return}
   run.i++;blk().at=elapsed();saveRun();P.render();window.scrollTo(0,0);
 }
-function sumView(id){
+function resultsHtml(x){
+  return `<div class="label">${esc(logTitle(x))}${x.short?` <em class="s-shortpill">Shortened</em>`:""}</div><ul class="s-res">${x.results.map(rr=>rr.seq?`<li><div><b>${esc(rr.step)}</b><span>Line ${rr.line}/${rr.n} · Window ${rr.win}/${rr.n}</span></div><small>${rr.rows.map(([sp,l,w,n])=>`${sp}: line ${l}/${n}, window ${w}/${n}`).join(" · ")}</small></li>`:rr.pick?`<li><div><b>${esc(rr.step)}</b><span>${rr.value==null?"—":rr.value+" "+esc(rr.unit)}</span></div><small>${esc(rr.pick)}</small></li>`:`<li><div><b>${esc(rr.step)}</b><span class="${rr.pass===false?"bad":rr.pass?"good":""}">${rr.total}/${rr.of}${rr.pass==null?"":rr.pass?" ✓ passed":" ✗ not passed"}</span></div>${rr.rows.length>1?`<small>${rr.rows.map(([l,v,o])=>`${esc(l)} ${v}/${o}`).join(" · ")}</small>`:""}</li>`).join("")}</ul>`;
+}
+function sumView(id,fresh){
   const rows=Store.get("practiceLog",[]).filter(x=>x.run===id);if(!rows.length)return null;
   const tot=rows.reduce((t,x)=>t+x.min,0);
-  return `<header><h1>Session Done</h1><p class="sub">${esc(Store.fmtDate(rows[0].date,{weekday:"long",month:"short",day:"numeric"}))}</p></header>
+  return `${fresh?"":`<a class="r-back" href="#practice">‹ Practice</a>`}<header><h1>${fresh?"Session Done":"Session"}</h1><p class="sub">${esc(Store.fmtDate(rows[0].date,{weekday:"long",month:"short",day:"numeric"}))}${rows[0].edited?" · edited":""}</p></header>
   <section class="panel r-sum"><div class="label">Practiced</div><div class="r-big">${tot} min</div>
-    <ol class="s-steps">${rows.map(x=>`<li class="${x.done?"done":"skip"}"><span>${esc(x.title)}</span><small>${x.done?"✓ ":"Not done · "}${x.min} min</small></li>`).join("")}</ol>
-    ${rows.filter(x=>x.results&&x.results.length).map(x=>`<div class="label">${esc(x.title)}</div><ul class="s-res">${x.results.map(rr=>rr.seq?`<li><div><b>${esc(rr.step)}</b><span>Line ${rr.line}/${rr.n} · Window ${rr.win}/${rr.n}</span></div><small>${rr.rows.map(([sp,l,w,n])=>`${sp}: line ${l}/${n}, window ${w}/${n}`).join(" · ")}</small></li>`:rr.pick?`<li><div><b>${esc(rr.step)}</b><span>${rr.value==null?"—":rr.value+" "+esc(rr.unit)}</span></div><small>${esc(rr.pick)}</small></li>`:`<li><div><b>${esc(rr.step)}</b><span class="${rr.pass===false?"bad":rr.pass?"good":""}">${rr.total}/${rr.of}${rr.pass==null?"":rr.pass?" ✓ passed":" ✗ not passed"}</span></div>${rr.rows.length>1?`<small>${rr.rows.map(([l,v,o])=>`${esc(l)} ${v}/${o}`).join(" · ")}</small>`:""}</li>`).join("")}</ul>`).join("")}
+    <ol class="s-steps">${rows.map(x=>`<li class="${x.done?"done":"skip"}"><span>${esc(logTitle(x))}${x.short?` <em class="s-shortpill">Shortened</em>`:""}</span><small>${x.done?"✓ ":"Not done · "}${x.min} min</small></li>`).join("")}</ol>
+    ${rows.filter(x=>x.results&&x.results.length).map(resultsHtml).join("")}
     ${rows.some(x=>x.games.length)?`<div class="label">Games</div><div class="r-list">${rows.flatMap(x=>x.games).map(P.gameRow).join("")}</div>`:""}
-    ${ciSummary(id)}
-    <p class="hint">Done sessions are highlighted on this week's plan.</p></section>
-  <div class="row"><a class="play" href="#practice">Done</a><a class="ghost" href="#notes" style="display:inline-flex;align-items:center">Update My Notes</a></div>`;
+    ${ciSummary(rows[0].date)}
+    ${fresh?`<p class="hint">Done sessions are highlighted on this week's plan.</p>`:""}</section>
+  <div class="row">${fresh?`<a class="play" href="#practice">Done</a>`:""}<a class="ghost" href="#practice/edit/${esc(id)}" style="display:inline-flex;align-items:center">Edit Session</a>${fresh?`<a class="ghost" href="#notes" style="display:inline-flex;align-items:center">Update My Notes</a>`:""}</div>`;
 }
+/* Practice home: the last sessions, newest first, each opening its summary (and from there, Edit). */
+function pastCard(){
+  const by={};plog().filter(x=>x.run).forEach(x=>{(by[x.run]=by[x.run]||[]).push(x)});
+  const runs=Object.entries(by).map(([id,rows])=>({id,rows,date:rows[0].date})).sort((a,b)=>a.date<b.date?1:a.date>b.date?-1:0).slice(0,20);
+  if(!runs.length)return "";
+  return `<details class="panel s-past"><summary class="label">Past Sessions</summary><div class="r-list">${runs.map(r=>`<a class="r-row" href="#practice/sum/${esc(r.id)}"><span class="r-date">${esc(Store.fmtDate(r.date,{month:"short",day:"numeric"}))}<small>${esc(Store.fmtDate(r.date,{weekday:"short"}))}</small></span>
+      <span class="r-name">${esc(r.rows.map(x=>SESS[x.s]?SESS[x.s].title:x.title).join(" + "))}<small>${r.rows.some(x=>x.short)?"Includes a shortened routine · ":""}Tap to see or edit</small></span><span class="r-score p-res">${r.rows.reduce((t,x)=>t+x.min,0)} min</span></a>`).join("")}</div>
+    <p class="hint">Forgot to enter something? Open the session and tap Edit Session. Games played on their own are edited from their game's history.</p></details>`;
+}
+
+/* ---------- edit a finished session: minutes, done, routine scores, shortened, and the day's check-in ---------- */
+let ed=null;
+function editView(id){
+  const rows=plog().filter(x=>x.run===id);if(!rows.length)return null;
+  if(!ed||ed.id!==id){const d=dayCI(rows[0].date);ed={id,date:rows[0].date,rows:clone(rows),ci:{start:d.start?clone(d.start):{},end:d.end?clone(d.end):{}},hadStart:!!d.start,hadEnd:!!d.end}}
+  const stepper=(act,i,r,j,v,of,label)=>`<div class="s-tally"><span>${esc(label)}</span><div class="stepper"><button data-act="${act}" data-i="${i}" data-r="${r}" data-j="${j}" data-v="-1" aria-label="One fewer ${esc(label)}">−</button><output>${v}${of!=null?" / "+of:""}</output><button data-act="${act}" data-i="${i}" data-r="${r}" data-j="${j}" data-v="1" aria-label="One more ${esc(label)}">+</button></div></div>`;
+  const blocks=ed.rows.map((x,i)=>{
+    const rt=x.routine&&ROUTINES[x.routine];
+    const res=(x.results||[]).map((rr,ri)=>{
+      if(rr.seq)return `<div class="s-edres"><div class="label">${esc(rr.step)}</div>${rr.rows.map(([sp,l,w,n],j)=>`<div class="s-edseq"><b>${esc(sp)} speed</b>
+          ${stepper("edseq",i,ri,j+":n",n,null,"Shots graded")}${stepper("edseq",i,ri,j+":l",l,n,"On line")}${stepper("edseq",i,ri,j+":w",w,n,"In window")}</div>`).join("")}</div>`;
+      if(rr.pick){const st=rt&&rt.steps.find(s=>s.name===rr.step),opts=st&&st.pick?st.pick.opts:[];
+        return `<div class="s-edres"><div class="label">${esc(rr.pick)}</div><div class="r-opts">${opts.map(o=>`<button class="r-opt" data-act="edpick" data-i="${i}" data-r="${ri}" data-v="${o}" aria-pressed="${rr.value===o}">${o} ${esc(rr.unit)}</button>`).join("")}</div></div>`}
+      return `<div class="s-edres"><div class="label">${esc(rr.step)}</div>${rr.rows.map(([l,v,o],j)=>stepper("edtal",i,ri,j,v,o,l)).join("")}</div>`;
+    }).join("");
+    const games=(x.games||[]).map(gid=>P.gameRow(gid).replace('class="r-row p-game" href="#practice/res/','class="r-row p-game" href="#practice/ge/')).join("");
+    return `<section class="panel s-edblk"><h2>${esc(logTitle(x))}</h2>
+      <div class="r-two"><label class="r-field"><span class="label">Minutes</span><input class="r-input" type="number" inputmode="numeric" min="0" max="300" data-edmin="${i}" value="${x.min}"></label>
+        <div class="r-field"><span class="label">This Week's Plan</span><button class="r-opt" data-act="eddone" data-i="${i}" aria-pressed="${!!x.done}">${x.done?"✓ Counted As Done":"Not Done"}</button></div></div>
+      ${x.routine?`<div class="r-field"><span class="label">Routine</span><button class="r-opt" data-act="edshort" data-i="${i}" aria-pressed="${!!x.short}">${x.short?"✓ Shortened":"Mark As Shortened"}</button><p class="hint">Shortened routines stay out of your routine stats in Insights.</p></div>`:""}
+      ${res}
+      ${games?`<div class="label">Games In This Block</div><div class="r-list">${games}</div><p class="hint">Tap a game to edit its shots.</p>`:""}</section>`}).join("");
+  const ciq=w=>CI_Q.map(([k,label,t])=>`<div class="r-field s-ci"><div class="s-ciq">${esc(label)}</div>
+    ${t==="yn"?`<div class="r-opts">${[["yes","Yes"],["no","No"]].map(([v,l])=>`<button class="r-opt" data-act="edci" data-w="${w}" data-q="${k}" data-v="${v}" aria-pressed="${ed.ci[w][k]===v}">${l}</button>`).join("")}</div>`
+      :`<div class="r-nums s-hq">${Array.from({length:10},(_,n)=>`<button class="r-num" data-act="edci" data-w="${w}" data-q="${k}" data-v="${n+1}" aria-pressed="${ed.ci[w][k]===n+1}">${n+1}</button>`).join("")}</div>`}</div>`).join("");
+  return `<a class="r-back" href="#practice/sum/${esc(id)}">‹ Session</a>
+  <header><h1>Edit Session</h1><p class="sub">${esc(Store.fmtDate(ed.date,{weekday:"long",month:"short",day:"numeric"}))}. Change anything, then tap Save Changes.</p></header>
+  ${blocks}
+  <section class="panel s-cis"><h2>That Day's Check-In</h2><div class="label">Start Of The Day</div>${ciq("start")}<div class="label">Check-Out</div>${ciq("end")}
+    <p class="hint">The check-in belongs to the day, so changing it here changes it for every session that day. A part is only saved once all three questions are answered.</p></section>
+  <div class="row"><button class="play" data-act="edsave">Save Changes</button><a class="ghost" href="#practice/sum/${esc(id)}" data-act="edcancel" style="display:inline-flex;align-items:center">Cancel</a></div>`;
+}
+function syncEdMin(){if(!ed)return;document.querySelectorAll("[data-edmin]").forEach(n=>{const v=parseInt(n.value,10);if(v>=0&&v<=300)ed.rows[+n.dataset.edmin].min=v})}
+function edRecalc(x){const rt=x.routine&&ROUTINES[x.routine];
+  (x.results||[]).forEach(rr=>{
+    if(rr.seq){rr.line=rr.rows.reduce((t,r)=>t+r[1],0);rr.win=rr.rows.reduce((t,r)=>t+r[2],0);rr.n=rr.rows.reduce((t,r)=>t+r[3],0)}
+    else if(!rr.pick&&rr.rows){rr.total=rr.rows.reduce((t,r)=>t+r[1],0);const st=rt&&rt.steps.find(s=>s.name===rr.step);if(st&&st.pass!=null)rr.pass=rr.total>=st.pass}})}
 
 const act={
   startday(el){const w=week(),ids=w.days[el.dataset.slot]||[],todo=ids.filter(id=>!w.done[id]);start(todo.length?todo:ids,slotName(el.dataset.slot).split(" ·")[0]+" Session")},
@@ -406,12 +582,44 @@ const act={
     if(!confirm("Discard this session? None of its time counts toward your practice, and nothing is marked done. Games you finished in it stay in their own history."))return;
     run=null;Store.set("run",null);P.go("",true);P.render()},
 
-  altoggle(){const st=Store.get("settings",{});st.alarm=!alarmOn();Store.set("settings",st);if(!st.alarm){Alarm.cancel();alarmSig=""}P.render()},
-  altest(){Alarm.play(Date.now()+50,4,3);alarmSig="";setTimeout(()=>{Alarm.cancel();syncAlarm()},4300)},
+  altoggle(){const st=Store.get("settings",{});st.alarm=!alarmOn();Store.set("settings",st);if(!st.alarm)Alarm.cancel();P.render()},
+  altest(){const a=new Audio(makeClip(0,4,3,false));a.onended=()=>URL.revokeObjectURL(a.src);
+    const p=a.play();if(p&&p.catch)p.catch(()=>{Alarm.play(Date.now()+50,4,3);setTimeout(()=>Alarm.cancel(),4300)})},
   ci(el){if(!run)return;run.cd=run.cd||{};const q=el.dataset.q;run.cd[q]=q==="hq"?+el.dataset.v:el.dataset.v;saveRun();P.render()},
   cistart(){if(!run||!CI_Q.every(([k])=>(run.cd||{})[k]!=null))return;run.ci.start={...run.cd,at:Date.now()};run.cd={};run.since=Date.now();
     const b=blk();if(b.r)b.stAt=0;saveRun();P.render()},
   ciend(){if(!run||!CI_Q.every(([k])=>(run.cd||{})[k]!=null))return;run.ci.end={...run.cd,at:Date.now()};logRun()},
+  cilater(){if(!run)return;run.ci.end=null;logRun()},
+  co(el){const q=el.dataset.q;coDraft[q]=q==="hq"?+el.dataset.v:el.dataset.v;P.render()},
+  cosave(){if(!ciReady(coDraft))return;const d=Store.today(),c=Store.get("checkins",[]),last=plog().filter(x=>x.date===d&&x.run).pop();
+    c.push({run:last?last.run:null,date:d,when:"end",fun:coDraft.fun,life:coDraft.life,hq:coDraft.hq,at:Date.now()});Store.set("checkins",c);coDraft={};P.go("",true)},
+  rshort(){if(!run)return;const b=blk();b.short=!b.short;saveRun();P.render()},
+  /* editing a finished session */
+  edtal(el){if(!ed)return;syncEdMin();const x=ed.rows[+el.dataset.i],rr=x.results[+el.dataset.r],row=rr.rows[+el.dataset.j];
+    row[1]=Math.max(0,Math.min(row[2],row[1]+ +el.dataset.v));edRecalc(x);P.render()},
+  edseq(el){if(!ed)return;syncEdMin();const x=ed.rows[+el.dataset.i],rr=x.results[+el.dataset.r],[j,f]=el.dataset.j.split(":"),row=rr.rows[+j];
+    const rt=ROUTINES[x.routine],st=rt&&rt.steps.find(s=>s.name===rr.step),per=st&&st.seq?st.seq.per:10;
+    const ix={l:1,w:2,n:3}[f];row[ix]=Math.max(0,row[ix]+ +el.dataset.v);row[3]=Math.min(per,row[3]);row[1]=Math.min(row[1],row[3]);row[2]=Math.min(row[2],row[3]);
+    edRecalc(x);P.render()},
+  edpick(el){if(!ed)return;syncEdMin();const rr=ed.rows[+el.dataset.i].results[+el.dataset.r],v=+el.dataset.v;rr.value=rr.value===v?null:v;P.render()},
+  eddone(el){if(!ed)return;syncEdMin();const x=ed.rows[+el.dataset.i];x.done=!x.done;P.render()},
+  edshort(el){if(!ed)return;syncEdMin();const x=ed.rows[+el.dataset.i];if(x.short)delete x.short;else x.short=true;P.render()},
+  edci(el){if(!ed)return;syncEdMin();const c=ed.ci[el.dataset.w],q=el.dataset.q,v=q==="hq"?+el.dataset.v:el.dataset.v;c[q]=c[q]===v?null:v;P.render()},
+  edcancel(){ed=null},
+  edsave(){if(!ed)return;syncEdMin();
+    const log=plog();let k=0;
+    log.forEach((x,i)=>{if(x.run===ed.id){const n=ed.rows[k++];if(n){n.edited=Date.now();log[i]=n}}});
+    Store.set("practiceLog",log);
+    /* done on this week's plan follows the edit, for sessions in the current week */
+    const w=week();if(ed.date>=w.of)ed.rows.forEach(x=>{if(!x.s||!SESS[x.s])return;if(x.done)w.done[x.s]=w.done[x.s]||ed.date;else if(w.done[x.s]===ed.date)delete w.done[x.s]});saveWeek(w);
+    /* the day's check-in: replace the day's first start / last end with the edited answers */
+    let c=Store.get("checkins",[]);const d=dayCI(ed.date);
+    ["start","end"].forEach(wh=>{const a=ed.ci[wh];if(!ciReady(a))return;const old=d[wh];
+      if(old){const i=c.findIndex(x=>x.date===old.date&&x.when===old.when&&x.at===old.at&&x.run===old.run);if(i>=0)c[i]={...c[i],fun:a.fun,life:a.life,hq:a.hq}}
+      else{const noon=new Date(ed.date+"T12:00").getTime(),at=ed.date===Store.today()?Date.now():noon+(wh==="end"?36e5:0);
+        c.push({run:ed.id,date:ed.date,when:wh,fun:a.fun,life:a.life,hq:a.hq,at})}});
+    Store.set("checkins",c);
+    const id=ed.id;ed=null;P.go("sum/"+id,true)},
   seqhit(el){if(!run)return;const b=blk(),i=+el.dataset.i,r=ROUTINES[b.r],sq=ensureSeq(b,i,r.steps[i]);if(sq.res.length>=sq.shots.length)return;
     sq.res.push({l:el.dataset.l==="1",w:el.dataset.w==="1"});saveRun();P.render()},
   sequndo(el){if(!run)return;const b=blk(),sq=(b.seq||{})[+el.dataset.i];if(sq&&sq.res.length){sq.res.pop();saveRun();P.render()}},
@@ -460,5 +668,6 @@ const act={
   window.addEventListener("pointercancel",e=>end(e,true));
 })();
 
-return {routineTitle:k=>ROUTINES[k]?ROUTINES[k].title:k,init,weekTotal,logFree,countGame,matchSession,title:id=>SESS[id]?SESS[id].title:id,weekCard,sessView,runView,sumView,runBar,homeCard,running,addGame,act,paint};
+return {routineTitle:k=>ROUTINES[k]?ROUTINES[k].title:k,init,weekTotal,logFree,countGame,matchSession,title:id=>SESS[id]?SESS[id].title:id,weekCard,sessView,runView,sumView,runBar,homeCard,
+  checkoutCard,checkoutView,pastCard,editView,running,addGame,act,paint};
 })();
