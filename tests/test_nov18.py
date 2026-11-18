@@ -9,6 +9,7 @@ def check(c,m):
     print(("PASS " if c else "FAIL ")+m)
     if not c: fails.append(m)
 J=lambda pg,e:pg.evaluate(e)
+location_hash=lambda pg:pg.evaluate("location.hash")
 def answer(pg,act="ci",hq="7",life="no"):
     pg.click(f'[data-act={act}][data-q=fun][data-v=yes]');pg.click(f'[data-act={act}][data-q=life][data-v={life}]');pg.click(f'[data-act={act}][data-q=hq][data-v="{hq}"]')
 def shift(pg,ms):
@@ -152,6 +153,31 @@ with sync_playwright() as p:
     pg.click("[data-act=gesave]");pg.wait_for_timeout(200)
     g=[x for x in J(pg,"JSON.parse(localStorage.getItem('rg.games'))") if x["game"]=="ladder"][0]
     check(g["result"]==9 and g["status"]=="done" and not g.get("short"),"ladder re-scored after the edit (9 balls)")
+
+    # ---- Past Sessions: bigger, and Delete ----
+    pg.goto(BASE+"#practice");pg.wait_for_timeout(200)
+    pg.click(".s-pasthd");pg.wait_for_timeout(150)
+    fs=J(pg,"parseFloat(getComputedStyle(document.querySelector('.s-pasthd')).fontSize)")
+    check(fs>=24,f"Past Sessions heading is big ({fs}px)")
+    n=pg.locator(".s-pastrow").count()
+    pg.locator(".s-pastrow").first.screenshot(path=f"{OUT}/n7-past-row.png")
+    pg.screenshot(path=f"{OUT}/n7-past.png",full_page=True)
+    newest=pg.locator(".s-pastrow [data-act=delrun]").first.get_attribute("data-run")
+    pg.locator(".s-pastrow [data-act=delrun]").first.click();pg.wait_for_timeout(250)
+    log=J(pg,"JSON.parse(localStorage.getItem('rg.practiceLog'))")
+    check(pg.locator(".s-pastrow").count()==n-1 and not any(r.get("run")==newest for r in log),"Delete removes the session and its minutes")
+    check(pg.locator(".s-past").get_attribute("open") is not None,"the list stays open after deleting")
+    check(len(J(pg,"JSON.parse(localStorage.getItem('rg.checkins'))"))==2,"other sessions that day keep the day's check-in")
+    pg.goto(BASE+f"#practice/sum/{run1}");pg.wait_for_timeout(200)
+    pg.click("[data-act=delrun]");pg.wait_for_timeout(250)
+    check(location_hash(pg)=="#practice" and not any(r.get("run")==run1 for r in J(pg,"JSON.parse(localStorage.getItem('rg.practiceLog'))")),"Delete Session on a summary works and goes home")
+
+    # ---- Previous Notes always answers ----
+    pg.goto(BASE+"#notes");pg.wait_for_timeout(200)
+    pg.click('.n-card[data-a=mental] [data-act=prev]');pg.wait_for_timeout(150)
+    check("No previous notes yet" in pg.locator('.n-card[data-a=mental]').text_content(),"Previous Notes on an empty box explains Update")
+    pg.locator('.n-box[data-a=mental]').fill("Breathe");pg.click('.n-card[data-a=mental] [data-act=update]');pg.wait_for_timeout(150)
+    check(pg.locator('.n-card[data-a=mental] .n-prev li').count()==1,"after Update, Previous Notes lists it")
 
     # ---- spellcheck off in the Notes boxes ----
     pg.goto(BASE+"#notes");pg.wait_for_timeout(200)

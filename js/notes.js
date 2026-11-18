@@ -26,8 +26,8 @@ const Notes=(()=>{
       <textarea class="r-input n-box" data-a="${a}" spellcheck="false" autocapitalize="sentences" aria-labelledby="n-${a}" placeholder="Feels and cues for ${esc(label.toLowerCase())}…">${esc(get(a))}</textarea>
       ${u?`<div class="n-undo" role="status"><span>Saved to Previous notes and cleared.</span><button class="ghost sm" data-act="undo" data-a="${a}">Undo</button></div>`:""}
       <div class="row n-acts"><button class="ghost" data-act="update" data-a="${a}">Update</button>
-        <button class="ghost" data-act="prev" data-a="${a}" aria-expanded="${open.has(a)}"${h.length?"":" disabled"}>Previous notes${h.length?` (${h.length})`:""}</button></div>
-      ${open.has(a)&&h.length?`<ol class="n-prev">${prev}</ol>`:""}
+        <button class="ghost" data-act="prev" data-a="${a}" aria-expanded="${open.has(a)}">Previous Notes${h.length?` (${h.length})`:""}</button></div>
+      ${open.has(a)?(h.length?`<ol class="n-prev">${prev}</ol>`:`<p class="hint n-none">No previous notes yet. When you tap <b>Update</b>, what's in the box is saved here with the date (the last ${KEEP} are kept) and the box is cleared for new notes.</p>`):""}
     </section>`;
   }
   function render(){

@@ -514,15 +514,29 @@ function sumView(id,fresh){
     ${rows.some(x=>x.games.length)?`<div class="label">Games</div><div class="r-list">${rows.flatMap(x=>x.games).map(P.gameRow).join("")}</div>`:""}
     ${ciSummary(rows[0].date)}
     ${fresh?`<p class="hint">Done sessions are highlighted on this week's plan.</p>`:""}</section>
-  <div class="row">${fresh?`<a class="play" href="#practice">Done</a>`:""}<a class="ghost" href="#practice/edit/${esc(id)}" style="display:inline-flex;align-items:center">Edit Session</a>${fresh?`<a class="ghost" href="#notes" style="display:inline-flex;align-items:center">Update My Notes</a>`:""}</div>`;
+  <div class="row">${fresh?`<a class="play" href="#practice">Done</a>`:""}<a class="ghost" href="#practice/edit/${esc(id)}" style="display:inline-flex;align-items:center">Edit Session</a>${fresh?"":`<button class="ghost danger" data-act="delrun" data-run="${esc(id)}">Delete Session</button>`}${fresh?`<a class="ghost" href="#notes" style="display:inline-flex;align-items:center">Update My Notes</a>`:""}</div>`;
 }
-/* Practice home: the last sessions, newest first, each opening its summary (and from there, Edit). */
+/* Practice home: the last sessions, newest first, each opening its summary (and from there, Edit), with Delete. */
+let pastOpen=false;
+document.addEventListener("toggle",e=>{if(e.target.classList&&e.target.classList.contains("s-past"))pastOpen=e.target.open},true);
+/* Delete a finished session: its minutes, its routine scores, and its "done" marks this week. Games played in it stay in
+   their own history. The day's check-in goes too if no other session that day is left; otherwise it moves to one of them. */
+function deleteRun(id){
+  const all=plog(),rows=all.filter(x=>x.run===id);if(!rows.length)return false;
+  const date=rows[0].date,log=all.filter(x=>x.run!==id);Store.set("practiceLog",log);
+  const w=week();rows.forEach(x=>{if(x.s&&w.done[x.s]===date&&!log.some(y=>y.s===x.s&&y.done&&y.date>=w.of))delete w.done[x.s]});saveWeek(w);
+  const other=log.find(x=>x.date===date&&x.run);
+  let c=Store.get("checkins",[]);
+  c=other?c.map(x=>x.run===id?{...x,run:other.run}:x):c.filter(x=>!(x.run===id||(x.date===date&&!log.some(y=>y.date===date))));
+  Store.set("checkins",c);return true;
+}
 function pastCard(){
   const by={};plog().filter(x=>x.run).forEach(x=>{(by[x.run]=by[x.run]||[]).push(x)});
   const runs=Object.entries(by).map(([id,rows])=>({id,rows,date:rows[0].date})).sort((a,b)=>a.date<b.date?1:a.date>b.date?-1:0).slice(0,20);
   if(!runs.length)return "";
-  return `<details class="panel s-past"><summary class="label">Past Sessions</summary><div class="r-list">${runs.map(r=>`<a class="r-row" href="#practice/sum/${esc(r.id)}"><span class="r-date">${esc(Store.fmtDate(r.date,{month:"short",day:"numeric"}))}<small>${esc(Store.fmtDate(r.date,{weekday:"short"}))}</small></span>
-      <span class="r-name">${esc(r.rows.map(x=>SESS[x.s]?SESS[x.s].title:x.title).join(" + "))}<small>${r.rows.some(x=>x.short)?"Includes a shortened routine · ":""}Tap to see or edit</small></span><span class="r-score p-res">${r.rows.reduce((t,x)=>t+x.min,0)} min</span></a>`).join("")}</div>
+  return `<details class="panel s-past"${pastOpen?" open":""}><summary class="s-pasthd">Past Sessions <small>${runs.length}</small></summary><div class="s-pastlist">${runs.map(r=>`<div class="s-pastrow"><a class="r-row" href="#practice/sum/${esc(r.id)}"><span class="r-date">${esc(Store.fmtDate(r.date,{month:"short",day:"numeric"}))}<small>${esc(Store.fmtDate(r.date,{weekday:"short"}))}</small></span>
+      <span class="r-name">${esc(r.rows.map(x=>SESS[x.s]?SESS[x.s].title:x.title).join(" + "))}<small>${r.rows.reduce((t,x)=>t+x.min,0)} min${r.rows.some(x=>x.short)?" · includes a shortened routine":""} · tap to see or edit</small></span></a>
+      <button class="ghost sm danger" data-act="delrun" data-run="${esc(r.id)}" aria-label="Delete the ${esc(Store.fmtDate(r.date,{month:"short",day:"numeric"}))} session">Delete</button></div>`).join("")}</div>
     <p class="hint">Forgot to enter something? Open the session and tap Edit Session. Games played on their own are edited from their game's history.</p></details>`;
 }
 
@@ -606,6 +620,10 @@ const act={
   edshort(el){if(!ed)return;syncEdMin();const x=ed.rows[+el.dataset.i];if(x.short)delete x.short;else x.short=true;P.render()},
   edci(el){if(!ed)return;syncEdMin();const c=ed.ci[el.dataset.w],q=el.dataset.q,v=q==="hq"?+el.dataset.v:el.dataset.v;c[q]=c[q]===v?null:v;P.render()},
   edcancel(){ed=null},
+  delrun(el){const id=el.dataset.run,rows=plog().filter(x=>x.run===id);if(!rows.length)return;
+    const games=rows.reduce((t,x)=>t+(x.games||[]).length,0);
+    if(!confirm(`Delete the ${Store.fmtDate(rows[0].date,{weekday:"long",month:"short",day:"numeric"})} session (${rows.reduce((t,x)=>t+x.min,0)} min)? Its minutes and routine scores are removed${games?`. The ${games} game${games===1?"":"s"} played in it stay in their own history`:""}. This can't be undone.`))return;
+    deleteRun(id);ed=null;if((location.hash||"").includes(id))P.go("",true);else P.render()},
   edsave(){if(!ed)return;syncEdMin();
     const log=plog();let k=0;
     log.forEach((x,i)=>{if(x.run===ed.id){const n=ed.rows[k++];if(n){n.edited=Date.now();log[i]=n}}});
