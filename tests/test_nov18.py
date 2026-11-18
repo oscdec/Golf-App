@@ -177,7 +177,11 @@ with sync_playwright() as p:
     pg.click('.n-card[data-a=mental] [data-act=prev]');pg.wait_for_timeout(150)
     check("No previous notes yet" in pg.locator('.n-card[data-a=mental]').text_content(),"Previous Notes on an empty box explains Update")
     pg.locator('.n-box[data-a=mental]').fill("Breathe");pg.click('.n-card[data-a=mental] [data-act=update]');pg.wait_for_timeout(150)
-    check(pg.locator('.n-card[data-a=mental] .n-prev li').count()==1,"after Update, Previous Notes lists it")
+    check(pg.locator('.n-card[data-a=mental] .n-prev li').count()==1 and pg.locator('.n-box[data-a=mental]').input_value()=="Breathe","after Update, Previous Notes lists it and the box keeps it")
+    # an old box that Update had cleared gets its last update back
+    J(pg,"localStorage.setItem('rg.notes',JSON.stringify({cur:{putting:''},edited:{},hist:{putting:[{text:'Eyes over the ball',at:Date.now()}]}}))")
+    pg.reload();pg.goto(BASE+"#notes");pg.wait_for_timeout(250)
+    check(pg.locator('.n-box[data-a=putting]').input_value()=="Eyes over the ball","boxes cleared by the old Update get their last update back")
 
     # ---- spellcheck off in the Notes boxes ----
     pg.goto(BASE+"#notes");pg.wait_for_timeout(200)
