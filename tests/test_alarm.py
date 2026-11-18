@@ -16,16 +16,18 @@ with sync_playwright() as p:
       HTMLMediaElement.prototype.play=function(){window.__plays++;return pl.call(this)};HTMLMediaElement.prototype.pause=function(){window.__paused++;return pa.call(this)};
       /* first sample louder than the hum, in seconds, and the loudness 1 s and 25 s after it */
       window.__chime=async()=>{const b=window.__clips[window.__clips.length-1];const a=new Int16Array((await b.arrayBuffer()).slice(44));const SR=8000;
-        let i=a.findIndex(v=>Math.abs(v)>600);if(i<0)return {at:null,len:a.length/SR};
-        const pk=(s,n)=>{let m=0;for(let k=s;k<s+n&&k<a.length;k++)m=Math.max(m,Math.abs(a[k]));return m};
-        return {at:i/SR,len:a.length/SR,early:pk(i,SR),late:pk(i+25*SR,SR)}};""")
+        /* take the known hum away, then the first sample with any chime in it */
+        const hum=k=>Math.round(0.004*32767*Math.sin(2*Math.PI*k/200));
+        let i=a.findIndex((v,k)=>Math.abs(v-hum(k))>12);if(i<0)return {at:null,len:a.length/SR};
+        const pk=(s,n)=>{let m=0;for(let k=s;k<s+n&&k<a.length;k++)m=Math.max(m,Math.abs(a[k]-hum(k)));return m};
+        return {at:i/SR,len:a.length/SR,first:pk(i,SR),mid:pk(i+14*SR,SR),full:pk(i+31*SR,SR)}};""")
     pg.goto(BASE+"#practice");J(pg,"localStorage.clear()");pg.reload();pg.wait_for_timeout(300)
     pg.goto(BASE+"#practice/s/techchip");pg.wait_for_timeout(150);pg.click("[data-act=startone]");pg.wait_for_timeout(200)
     pg.click('[data-act=ci][data-q=fun][data-v=yes]');pg.click('[data-act=ci][data-q=life][data-v=no]');pg.click('[data-act=ci][data-q=hq][data-v="8"]');pg.click("[data-act=cistart]")
     pg.wait_for_timeout(1500)
     ch=J(pg,"window.__chime()")
     check(J(pg,"window.__plays")>=1 and ch["at"] is not None and 296<=ch["at"]<=301,f"lock-screen clip playing, alarm baked in at the end of the 5-min warm-up ({ch})")
-    check(ch["early"]<ch["late"],"alarm rises from quiet to full volume")
+    check(ch["first"]<ch["full"]*0.01 and ch["full"]*0.03<ch["mid"]<ch["full"]*0.1 and ch["full"]>19000,f"alarm starts at under 1% of full, is still quiet halfway (about -25 dB), full by 30 s ({ch})")
     md=J(pg,"({t:navigator.mediaSession.metadata.title,a:navigator.mediaSession.metadata.artist,s:navigator.mediaSession.playbackState})")
     check(md["t"].startswith("Warm-Up · 4:5") and "Technical Chipping" in md["a"] and "Practiced 0:0" in md["a"] and md["s"]=="playing",f"lock screen shows section, block and practiced ({md})")
     check(pg.locator("#alarmBar").count()==0,"no bar before time is up")

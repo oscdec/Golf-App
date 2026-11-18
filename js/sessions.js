@@ -333,15 +333,18 @@ function routineResult(b){const r=ROUTINES[b.r];if(!r||!r.steps)return null;
    When a routine section (or a block with no routine) runs out of time, a beeping chime plays and rises in volume over
    about 20 seconds. It's played through Web Audio, which on a phone uses the media volume, so the media volume sets the
    top. The sound is scheduled ahead on the audio clock, so it fires on time even if the page's timers are slowed. */
+/* The alarm starts very quiet (-50 dB, about 1/300 of full) and climbs evenly in loudness to full over 30 seconds.
+   (It used to start at 1/25 of full over 20 s: phone speakers compress loud sounds, so that already sounded loud.) */
+const START_GAIN=0.003,RISE=30;
 const Alarm=(()=>{
   let ctx=null,nodes=[],master=null;
   function ac(){const C=window.AudioContext||window.webkitAudioContext;if(!C)return null;if(!ctx)ctx=new C();if(ctx.state==="suspended")ctx.resume().catch(()=>{});return ctx}
   function cancel(){nodes.forEach(o=>{try{o.stop()}catch(e){}});nodes=[];if(master){try{master.disconnect()}catch(e){}master=null}}
-  function play(atMs,secs=180,rise=20){
+  function play(atMs,secs=180,rise=RISE){
     cancel();const c=ac();if(!c)return;
     const t0=c.currentTime+Math.max(0,(atMs-Date.now())/1000);
     master=c.createGain();master.connect(c.destination);
-    master.gain.setValueAtTime(0.0001,c.currentTime);master.gain.setValueAtTime(0.04,t0);master.gain.exponentialRampToValueAtTime(1,t0+rise);
+    master.gain.setValueAtTime(0.0001,c.currentTime);master.gain.setValueAtTime(START_GAIN,t0);master.gain.exponentialRampToValueAtTime(1,t0+rise);
     for(let t=t0;t<t0+secs;t+=1.2){
       [[880,0],[1320,.18]].forEach(([f,d])=>{const o=c.createOscillator(),e=c.createGain();o.type="triangle";o.frequency.value=f;
         e.gain.setValueAtTime(0.0001,t+d);e.gain.linearRampToValueAtTime(.9,t+d+.012);e.gain.exponentialRampToValueAtTime(.0001,t+d+.26);
@@ -368,7 +371,7 @@ function wavURL(pcm){
   new Int16Array(buf,44).set(pcm);return URL.createObjectURL(new Blob([buf],{type:"audio/wav"}));
 }
 /* One clip: `hum` seconds of hum, then (if chime>0) the alarm for `chime` seconds, rising from quiet to full over `rise`. */
-function makeClip(hum,chime,rise=20,withHum=true){
+function makeClip(hum,chime,rise=RISE,withHum=true){
   const n=Math.max(SR,Math.round((hum+chime)*SR)),pcm=new Int16Array(n);
   if(withHum){const per=SR/HUM_HZ,a=HUM_AMP*32767;for(let i=0;i<n;i++)pcm[i]=Math.round(a*Math.sin(2*Math.PI*i/per))}
   if(chime>0){
@@ -376,7 +379,7 @@ function makeClip(hum,chime,rise=20,withHum=true){
     const pat=new Float32Array(Math.round(1.2*SR));
     [[880,0],[1320,.18]].forEach(([f,d])=>{const s0=Math.round(d*SR),m=Math.round(.3*SR);
       for(let i=0;i<m&&s0+i<pat.length;i++){const x=i/SR,env=Math.min(1,x/.012)*Math.exp(-x*18);pat[s0+i]+=Math.sin(2*Math.PI*f*x)*env*.9}});
-    const s0=Math.round(hum*SR),lo=Math.log(.04);
+    const s0=Math.round(hum*SR),lo=Math.log(START_GAIN);
     for(let i=s0;i<n;i++){const t=(i-s0)/SR,g=t>=rise?1:Math.exp(lo*(1-t/rise));
       pcm[i]=Math.max(-32767,Math.min(32767,pcm[i]+pat[(i-s0)%pat.length]*g*.85*32767))}
   }
@@ -603,8 +606,9 @@ const act={
     run=null;Store.set("run",null);P.go("",true);P.render()},
 
   altoggle(){const st=Store.get("settings",{});st.alarm=!alarmOn();Store.set("settings",st);if(!st.alarm)Alarm.cancel();P.render()},
-  altest(){const a=new Audio(makeClip(0,4,3,false));a.onended=()=>URL.revokeObjectURL(a.src);
-    const p=a.play();if(p&&p.catch)p.catch(()=>{Alarm.play(Date.now()+50,4,3);setTimeout(()=>Alarm.cancel(),4300)})},
+  /* Test: 12 seconds, rising from the same quiet start to full, so you can hear the climb. */
+  altest(){const a=new Audio(makeClip(0,12,10,false));a.onended=()=>URL.revokeObjectURL(a.src);
+    const p=a.play();if(p&&p.catch)p.catch(()=>{Alarm.play(Date.now()+50,12,10);setTimeout(()=>Alarm.cancel(),12300)})},
   ci(el){if(!run)return;run.cd=run.cd||{};const q=el.dataset.q;run.cd[q]=q==="hq"?+el.dataset.v:el.dataset.v;saveRun();P.render()},
   cistart(){if(!run||!CI_Q.every(([k])=>(run.cd||{})[k]!=null))return;run.ci.start={...run.cd,at:Date.now()};run.cd={};run.since=Date.now();
     const b=blk();if(b.r)b.stAt=0;saveRun();P.render()},
