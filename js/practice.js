@@ -19,9 +19,8 @@ const LADDERS={wedges30:[30,40,50,60,70,80,90,100],irons:[120,135,150,165,175,18
 const COMBINE=[3,12,4,11,5,10,6,9,7,8];
 const BENCH=[["Scratch",0,29.79],["5 hcp",5,31.03],["10 hcp",10,31.95],["15 hcp",15,32.91],["20 hcp",20,33.88]];
 
-/* On-course benchmarks by handicap 0,5,10,15,20,25 (Shot Scope). Approach proximity in feet by distance band;
-   short game (inside 50 yards) average proximity, shots to finish and up-and-down %. 10-handicap short-game
-   values weren't published: they are halfway between 5 and 15 (marked "est."). */
+/* On-course benchmarks by handicap 0,5,10,15,20,25 (Shot Scope): approach proximity in feet by distance band;
+   short game inside 50 yards. Real published numbers only; anything not published is left out, never estimated. */
 const HC=[0,5,10,15,20,25],HC_LABEL=["Scratch","5 hcp","10 hcp","15 hcp","20 hcp","25 hcp"];
 const APPROACH={b50:[26,36,41,48,49,57],b100:[38,50,57,72,81,91],b150:[54,82,92,122,132,168],
   /* 30–40 yd: Lou Stagner's Arccos medians from the rough (newsletter #27), handicaps 0–20, mean of his 30 and 40-yard rows
@@ -30,7 +29,11 @@ const APPROACH={b50:[26,36,41,48,49,57],b100:[38,50,57,72,81,91],b150:[54,82,92,
 const MEDIAN_BANDS={b30:true};
 const BAND_NAME={b30:"30–40 yd",b50:"50–100 yd",b100:"100–150 yd",b150:"150–200 yd"};
 const median=a=>{const b=[...a].sort((x,y)=>x-y),m=b.length>>1;return b.length%2?b[m]:(b[m-1]+b[m])/2};
-const SG_PROX=[11,14,16,18,20,22],SG_FINISH=[2.45,2.55,2.665,2.78,2.86,3.01],SG_UD=[54,47,39,34,31,25];
+/* Shot Scope inside 50 yards. The 10-handicap proximity and shots-to-finish weren't published, so they're left out (null), not estimated. */
+const SG_PROX=[11,14,null,18,20,22],SG_FINISH=[2.45,2.55,null,2.78,2.86,3.01],SG_UD=[54,47,39,34,31,25];
+/* Lou Stagner (Arccos) median proximity in feet from the rough, by distance, handicaps 0, 5, 10, 15, 20 (newsletter #27). */
+const LOU_CHIP={10:[5.9,8.1,10.2,11.9,13.6],15:[8.0,10.2,12.1,13.9,15.7],20:[10.3,12.4,14.7,16.4,18.6],25:[12.2,14.8,17.1,18.9,21.5],30:[14.8,16.9,19.9,21.5,24.5]};
+const CHIP_YDS=[10,15,20,25,30];
 const CHIP_ZONES=[["Holed",0],["Inside 3 ft",2],["3–6 ft",4.5],["6–10 ft",8],["10–15 ft",12.5],["15–20 ft",17.5],["20–30 ft",25],["30 ft +",35],["Off the green",40]];
 const CHIP_CALL={Short:"Under 10 yards, just off the green",Medium:"About 10–20 yards",Long:"About 20–30 yards"};
 const r1=v=>Math.round(v*10)/10;
@@ -128,7 +131,8 @@ const G={
     start:()=>({order:shuffle([30,40,50,60,75,90,105,120].flatMap(y=>[y,y,y]))}),
     replay:(s,log)=>{const r=proxReplay(s.order,log,t=>t<50?"b30":t<=100?"b50":"b100",0);return {...r,done:log.length>=24,result:r.hc}},
     fmt:fmtHcp},
-  chipc:{name:"Chipping Combine",kind:"Chipping · No Putting",better:"low",
+  /* The first Chipping Combine (short/medium/long, Nov 17); no longer offered, kept so past games still open. */
+  chipc:{name:"Chipping Combine (Old Version)",kind:"Chipping · No Putting",better:"low",
     blurb:"18 chips from short, medium and long spots. No putting: just mark where each one finishes. Compare your average leave to scratch through 25 handicaps.",
     rules:["The app calls each chip: short (under 10 yards, just off the green), medium (about 10–20 yards) or long (about 20–30 yards), 6 of each in random order.","Toss the ball and play the lie you get. Change holes every chip.","Tap where the ball finished. Quick measures: a flagstick is about 7 feet, a putter about 3 feet, a long stride about 3 feet.","Result: your average leave in feet, against Shot Scope's on-course averages from inside 50 yards. Off the green counts as 40 feet and as a double chip."],
     variant:()=>"chipc",label:()=>"",
@@ -136,6 +140,17 @@ const G={
     replay:(s,log)=>{const ft=log.map(z=>CHIP_ZONES[z][1]),avg=log.length?sum(ft)/log.length:0;
       return {n:log.length,avg,in6:log.filter(z=>z<=2).length,dc:log.filter(z=>z===8).length,done:log.length>=18,result:r1(avg)}},
     fmt:v=>(+v).toFixed(1)+" ft"},
+  chip20:{name:"Chipping Combine",kind:"Chipping · No Putting",better:"low",bench:true,
+    blurb:"20 chips, 4 each from 10, 15, 20, 25 and 30 yards, in random order. No putting: just mark where each one finishes. Your result is the handicap your chipping plays like, against Lou Stagner's numbers.",
+    rules:["The app calls each chip's distance: 10, 15, 20, 25 or 30 yards, 4 of each in random order. Pace it off (a long stride is about a yard).","Toss the ball and play the lie you get. Change holes every chip.","Tap where the ball finished. Quick measures: a flagstick is about 7 feet, a putter about 3 feet.","Result: for each distance, your median leave against Lou Stagner's Arccos medians from the rough (scratch to 20 handicap), turned into the handicap it plays like; the five are averaged. Off the green counts as 40 feet and as a double chip.","Range and practice-green lies are usually kinder than the course, so expect it to flatter you a little."],
+    variant:()=>"chip20",label:()=>"",
+    start:()=>({order:shuffle(CHIP_YDS.flatMap(y=>[y,y,y,y]))}),
+    replay:(s,log)=>{const by={};log.forEach((z,i)=>{const y=s.order[i];(by[y]=by[y]||[]).push(CHIP_ZONES[z][1])});
+      const per=CHIP_YDS.filter(y=>by[y]).map(y=>{const m=median(by[y]);return {y,n:by[y].length,med:m,hc:playsLike(m,LOU_CHIP[y])}});
+      const all=log.map(z=>CHIP_ZONES[z][1]);
+      return {n:log.length,per,avg:all.length?sum(all)/all.length:0,med:all.length?median(all):0,in6:log.filter(z=>z<=2).length,dc:log.filter(z=>z===8).length,
+        done:log.length>=20,result:per.length?r1(sum(per.map(x=>x.hc))/per.length):null}},
+    fmt:fmtHcp},
   updown:{name:"Up-and-Down 18",kind:"Chipping & Putting",better:"low",
     blurb:"18 holes from around the green, holed out. For days the facility lets you chip and putt.",
     rules:["12 holes from inside 25 yards and 6 from 25–50 yards, in random order. One ball per hole.","Toss the ball and play the lie you get. New hole every time, and hole out every putt.","Enter the strokes for each hole. If the chip missed the green, tap that first: it's a double chip.","Result: total strokes, against Shot Scope's average shots to finish from inside 50 yards, times 18."],
@@ -151,7 +166,7 @@ const G={
     replay:(s,log)=>({done:log.length>=1,result:log[0]?log[0].score:null}),
     fmt:v=>(+v).toFixed(1)+" pts"},
 };
-const GROUPS=[["Full swing",["bsc","skytrak","safe","fairway","range","must"]],["Wedges & irons",["wedge","ladder"]],["Chipping",["chipc","updown"]],["Putting",["combine","lag"]]];
+const GROUPS=[["Full swing",["bsc","skytrak","safe","fairway","range","must"]],["Wedges & irons",["wedge","ladder"]],["Chipping",["chip20","updown"]],["Putting",["combine","lag"]]];
 
 /* ---------- stats ---------- */
 const active=()=>games.find(g=>g.status==="active");
@@ -161,7 +176,7 @@ function stat(key,variant,before){
   const vals=all.map(g=>g.result),best=G[key].better==="high"?Math.max(...vals):Math.min(...vals);
   return {avg:sum(last.map(g=>g.result))/last.length,n:last.length,total:all.length,best};
 }
-const fmtAvg=(key,v)=>{const r=Math.round(v*10)/10;return key==="range"?toPar(r):(key==="safe"||key==="fairway")?sgn(r):(key==="bsc"||key==="wedge"||key==="chipc"||key==="skytrak")?G[key].fmt(r):String(r)};
+const fmtAvg=(key,v)=>{const r=Math.round(v*10)/10;return key==="range"?toPar(r):(key==="safe"||key==="fairway")?sgn(r):(key==="bsc"||key==="wedge"||key==="chipc"||key==="chip20"||key==="skytrak")?G[key].fmt(r):String(r)};
 const beat=(key,v,avg)=>G[key].better==="high"?v>avg:v<avg;
 
 /* ---------- routing ---------- */
@@ -297,6 +312,12 @@ function play(g){
     <div class="p-call">${c}<span>${CHIP_CALL[c]} · new hole, toss the ball</span></div>
     <div class="r-field"><div class="label">Where it finished</div><div class="c-zones">${CHIP_ZONES.map(([l],i)=>`<button class="p-btn${i<=2?" good":i===8?" bad":""}" data-act="log" data-v="${i}">${esc(l)}</button>`).join("")}</div></div>
     ${s.n?`<p class="hint r-center">Inside 6 ft: ${s.in6} · off the green: ${s.dc}</p>`:""}`;
+  }else if(k==="chip20"){
+    const y=g.setup.order[s.n];
+    body=`<div class="p-head"><div class="label">Chip ${s.n+1} of 20${s.n?` · median ${r1(s.med)} ft`:""}</div>${bar(s.n,20)}</div>
+    <div class="p-call">${y} yd<span>Pace it off · new hole, toss the ball</span></div>
+    <div class="r-field"><div class="label">Where It Finished</div><div class="c-zones">${CHIP_ZONES.map(([l],i)=>`<button class="p-btn${i<=2?" good":i===8?" bad":""}" data-act="log" data-v="${i}">${esc(l)}</button>`).join("")}</div></div>
+    ${s.n?`<p class="hint r-center">Inside 6 ft: ${s.in6} · off the green: ${s.dc}</p>`:""}`;
   }else if(k==="updown"){
     const c=g.setup.order[s.n];
     body=`<div class="p-head"><div class="label">Hole ${s.n+1} of 18 · ${s.total} strokes</div>${bar(s.n,18)}</div>
@@ -356,19 +377,28 @@ function result(g,fresh){
       <p class="hint">Solid: carry of ${g.setup.drv-30} yd or more and within 20 yd of center. Handicap benchmarks for this to come.</p>
       <div class="p-log">${s.dr.map(x=>`<span class="${x.solid?"ok":"no"}">${Math.round(x.e.c)} · ${r1(x.e.o)}${x.e.s||""}</span>`).join("")}</div></section>`:""}
     <section class="panel"><div class="label">Shots (Feet From Target)</div><div class="p-shots">${s.ir.map(x=>`<span class="${x.ft<=benchAt(APPROACH[x.band],ref)/2?"ok":x.ft>2*benchAt(APPROACH[x.band],ref)?"no":""}"><b>${Math.round(x.ft)}</b>${x.t} yd</span>`).join("")}</div></section>`;
+  }else if(k==="chip20"){
+    const idx=myIndex();
+    const rows=[0,1,2,3,4].map(i=>[HC_LABEL[i],HC[i],...CHIP_YDS.map(y=>LOU_CHIP[y][i].toFixed(1))]);
+    extra=`<section class="panel"><div class="label">Plays Like, By Distance</div><table class="p-bench"><tr class="hd"><th></th><td>Your median</td><td>Plays like</td></tr>
+      ${s.per.map(x=>`<tr><th>${x.y} yd</th><td>${r1(x.med)} ft</td><td>${fmtHcp(r1(x.hc))}</td></tr>`).join("")}</table>
+      <p class="hint">Inside 6 ft (holed included): ${s.in6} of 20 · off the green: ${s.dc} · median of all chips ${r1(s.med)} ft.</p></section>
+    <section class="panel"><div class="label">Lou Stagner's Medians By Handicap (Feet)</div>${hcTable(CHIP_YDS.map(y=>y+" yd"),rows,idx)}
+      <p class="hint">Arccos medians from the rough (Lou Stagner, newsletter #27). ${idx==null?"Add rounds or past GHIN scores so the app can highlight the rows around your index.":`Highlighted: the rows around your index of ${idx.toFixed(1)}.`} Lou's table stops at 20 handicap; beyond it the app extends the trend.</p></section>
+    <section class="panel"><div class="label">Chips</div><div class="p-shots">${g.log.map((z,i)=>`<span class="${z<=2?"ok":z>=7?"no":""}"><b>${esc(CHIP_ZONES[z][0])}</b>${g.setup.order[i]} yd</span>`).join("")}</div></section>`;
   }else if(k==="chipc"){
-    const idx=myIndex(),pl=playsLike(g.result,SG_PROX);
-    const rows=HC.map((h,i)=>{const d=r1(SG_PROX[i]-g.result);return [HC_LABEL[i]+(h===10?" (est.)":""),h,SG_PROX[i]+" ft",`<span class="${d>=0?"good":"bad"}">${d>=0?"+":"−"}${Math.abs(d).toFixed(1)}</span>`]});
-    extra=`<section class="panel"><div class="label">Plays like</div><div class="r-big">${fmtHcp(r1(pl))}</div>
-      <p class="hint">Inside 6 ft (holed included): ${s.in6} of 18 · off the green: ${s.dc}.</p></section>
+    const idx=myIndex(),known=SG_PROX.map((v,i)=>[v,i]).filter(x=>x[0]!=null);
+    const rows=known.map(([v,i])=>{const d=r1(v-g.result);return [HC_LABEL[i],HC[i],v+" ft",`<span class="${d>=0?"good":"bad"}">${d>=0?"+":"−"}${Math.abs(d).toFixed(1)}</span>`]});
+    extra=`<section class="panel"><div class="label">Old Version</div>
+      <p class="hint">This game is from the first Chipping Combine (short, medium and long). Inside 6 ft (holed included): ${s.in6} of 18 · off the green: ${s.dc}.</p></section>
     <section class="panel"><div class="label">Average leave by handicap, inside 50 yd (Shot Scope)</div>${hcTable(["Average","You vs them"],rows,idx)}
       <p class="hint">Plus means you finished closer than that handicap's average. ${idx==null?"Add rounds or past GHIN scores so the app can highlight the rows around your index.":`Highlighted: the rows around your index of ${idx.toFixed(1)}.`} On-course chips include bunkers and tougher lies.</p></section>
     <section class="panel"><div class="label">Chips</div><div class="p-shots">${g.log.map((z,i)=>`<span class="${z<=2?"ok":z>=7?"no":""}"><b>${esc(CHIP_ZONES[z][0])}</b>${g.setup.order[i]}</span>`).join("")}</div></section>`;
   }else if(k==="updown"){
     const idx=myIndex(),ud=Math.round(s.ud/18*100);
-    const rows=HC.map((h,i)=>{const b=r1(SG_FINISH[i]*18),d=r1(b-g.result);return [HC_LABEL[i]+(h===10?" (est.)":""),h,b.toFixed(1),`<span class="${d>=0?"good":"bad"}">${d>=0?"+":"−"}${Math.abs(d).toFixed(1)}</span>`,SG_UD[i]+"%"]});
+    const rows=HC.map((h,i)=>{if(SG_FINISH[i]==null)return [HC_LABEL[i],h,"—","—",SG_UD[i]+"%"];const b=r1(SG_FINISH[i]*18),d=r1(b-g.result);return [HC_LABEL[i],h,b.toFixed(1),`<span class="${d>=0?"good":"bad"}">${d>=0?"+":"−"}${Math.abs(d).toFixed(1)}</span>`,SG_UD[i]+"%"]});
     extra=`<section class="panel"><div class="label">Strokes gained vs benchmarks</div>${hcTable(["Strokes","Gained","Up & down"],rows,idx)}
-      <p class="hint">You got up and down ${s.ud} of 18 (${ud}%) with ${s.dc} double chip${s.dc===1?"":"s"}. Benchmarks: Shot Scope's average shots to finish from inside 50 yards, times 18. ${idx==null?"":`Highlighted: the rows around your index of ${idx.toFixed(1)}.`}</p></section>
+      <p class="hint">You got up and down ${s.ud} of 18 (${ud}%) with ${s.dc} double chip${s.dc===1?"":"s"}. Benchmarks: Shot Scope's average shots to finish from inside 50 yards, times 18 (no 10-handicap figure was published). ${idx==null?"":`Highlighted: the rows around your index of ${idx.toFixed(1)}.`}</p></section>
     <section class="panel"><div class="label">Holes</div><div class="p-log">${g.log.map(e=>`<span class="${e.s<=2?"ok":e.s>=4?"no":""}">${e.s}${e.dc?"*":""}</span>`).join("")}</div></section>`;
   }else if(k==="skytrak"){
     const e=g.log[0]||{};

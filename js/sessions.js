@@ -17,7 +17,7 @@ const SESS={
   wedge2:{title:"Wedge Session",min:30,disc:"Wedges",where:"Launch Monitor",games:["wedge",{k:"ladder",o:{set:"wedges30"}}],notes:["wedges"]},
   techchip:{title:"Technical Chipping",min:30,disc:"Chipping",where:"Practice Facility",routines:["chip"],notes:["chipping"]},
   techputt:{title:"Technical Putting",min:30,disc:"Putting",where:"Practice Facility",routines:["putt"],notes:["putting"]},
-  chipgame:{title:"Chipping Game",min:30,disc:"Chipping",where:"Practice Facility",games:["chipc","updown"],notes:["chipping"]},
+  chipgame:{title:"Chipping Game",min:30,disc:"Chipping",where:"Practice Facility",games:["chip20","updown"],notes:["chipping"]},
   puttgame:{title:"Putting Game",min:30,disc:"Putting",where:"Practice Facility",games:["combine","lag"],notes:["putting"]},
   freestyle:{title:"Ball Striking – Freestyle",min:20,disc:"Full swing",where:"Launch Monitor",optional:true,free:true,notes:["driver","irons"]},
 };
@@ -47,7 +47,7 @@ const ROUTINES={
   putt:{title:"Technical Putting",steps:[
     {name:"3' Startline Putts",min:6},
     {name:"Lag Putt And Finish",min:12,prompt:"Lag Putt, Two Putt without the scorekeeping.",tip:"From one spot, lag balls 1–3 to holes 1–3 (25–45 ft), hole out, then putt each to hole 4 and hole out."},
-    {name:"3' To 8' Putting Spiral",min:12,prompt:"Work around the spiral from 3 to 8 feet.",tip:"Done early if you complete the whole spiral: tick it, then tap Finish.",tally:[["Spiral completed",1]],pass:1},
+    {name:"3' To 8' Putting Spiral",min:12,prompt:"Work around the spiral from 3 to 8 feet.",tip:"Done early if you complete the whole spiral (8 ft): tap Finish.",pick:{label:"Farthest Spiral Distance",opts:[3,4,5,6,7,8],unit:"ft"}},
   ]},
 };
 const rTitle=id=>ROUTINES[id]?ROUTINES[id].title:"";
@@ -60,7 +60,7 @@ const init=h=>{P={...P,...h}};
 const plog=()=>Store.get("practiceLog",[]);
 const shortDate=d=>Store.fmtDate(d,{month:"short",day:"numeric"});
 function lastDone(id,routine){const l=plog().filter(x=>(id==null||x.s===id)&&(!routine||x.routine===routine)&&(x.done||x.min>0)).sort((a,b)=>a.date<b.date?-1:1);return l.length?l[l.length-1].date:null}
-const GAME_DISC={bsc:"Full swing",skytrak:"Full swing",safe:"Full swing",fairway:"Full swing",range:"Full swing",must:"Full swing",wedge:"Wedges",chipc:"Chipping",updown:"Chipping",combine:"Putting",lag:"Putting"};
+const GAME_DISC={bsc:"Full swing",skytrak:"Full swing",safe:"Full swing",fairway:"Full swing",range:"Full swing",must:"Full swing",wedge:"Wedges",chipc:"Chipping",chip20:"Chipping",updown:"Chipping",combine:"Putting",lag:"Putting"};
 /* A game played outside a session still counts as practice: time from start to finish, 1 to 60 minutes. */
 function logFree(g,title){
   const disc=g.game==="ladder"?(g.setup.set==="irons"?"Full swing":"Wedges"):GAME_DISC[g.game]||"Full swing";
@@ -211,7 +211,7 @@ function routinePanel(s,b){
     return `<div class="s-tally"><span>${esc(l)}</span><div class="stepper"><button data-act="tal" data-i="${i}" data-j="${j}" data-v="-1" aria-label="One fewer ${esc(l)}">−</button><output>${v} / ${of}</output><button data-act="tal" data-i="${i}" data-j="${j}" data-v="1" aria-label="One more ${esc(l)}">+</button></div></div>`}).join("");
   const tot=stepTotal(b,i,st),of=(st.tally||[]).reduce((t,x)=>t+x[1],0);
   const pass=st.pass!=null?`<p class="s-pass ${tot>=st.pass?"ok":""}">${tot>=st.pass?"✓ Passed":`${st.pass-tot} More To Pass`} · ${tot} of ${of}</p>`:st.tally?`<p class="hint">Total ${tot} of ${of}</p>`:"";
-  const list=r.steps.map((x,k)=>{const t=x.tally?` · ${stepTotal(b,k,x)}/${x.tally.reduce((a,y)=>a+y[1],0)}`:"";
+  const list=r.steps.map((x,k)=>{const t=x.tally?` · ${stepTotal(b,k,x)}/${x.tally.reduce((a,y)=>a+y[1],0)}`:x.pick&&(b.pick||{})[k]!=null?` · ${b.pick[k]} ${x.pick.unit}`:"";
     return `<li class="${k<i?"done":k===i?"cur":""}"><span>${esc(x.name)}</span><small>${x.min} min${t}</small></li>`}).join("");
   return `<section class="panel s-what s-routine">
     <div class="s-rhd"><div class="label">${esc(r.title)} · step ${i+1} of ${n}</div>${change}</div>
@@ -219,12 +219,15 @@ function routinePanel(s,b){
     <div class="s-stepclock"><span data-clock="step">${st.min}:00</span><small data-clock="steplbl">Left In Step</small></div>
     ${st.items?`<ul class="s-items">${st.items.map(x=>`<li>${esc(x)}</li>`).join("")}</ul>`:""}
     ${st.prompt?`<p class="s-prompt">${esc(st.prompt)}</p>`:""}${st.tip?`<p class="hint">${esc(st.tip)}</p>`:""}${st.note?`<p class="hint">${esc(st.note)}</p>`:""}
-    ${tally}${pass}
+    ${tally}${pass}${st.pick?(()=>{const v=(b.pick||{})[i];return `<div class="r-field s-pick"><div class="label">${esc(st.pick.label)}</div>
+      <div class="r-opts">${st.pick.opts.map(o=>`<button class="r-opt" data-act="pick" data-i="${i}" data-v="${o}" aria-pressed="${v===o}">${o} ${esc(st.pick.unit)}</button>`).join("")}</div>
+      ${v===st.pick.opts[st.pick.opts.length-1]?`<p class="s-pass ok">✓ Whole spiral done: you can finish.</p>`:""}</div>`})():""}
     <div class="row">${i>0?`<button class="ghost" data-act="step" data-v="-1">‹ Back A Step</button>`:""}${i<n-1?`<button class="play" data-act="step" data-v="1">Next: ${esc(r.steps[i+1].name)}</button>`:""}</div>
     <ol class="s-steps">${list}</ol></section>`;
 }
 function routineResult(b){const r=ROUTINES[b.r];if(!r||!r.steps)return null;
-  return r.steps.filter(x=>x.tally).map(x=>{const k=r.steps.indexOf(x),tot=stepTotal(b,k,x),of=x.tally.reduce((a,y)=>a+y[1],0);
+  return r.steps.filter(x=>x.tally||x.pick).map(x=>{if(x.pick){const k=r.steps.indexOf(x),v=(b.pick||{})[k];
+      return {step:x.name,pick:x.pick.label,value:v==null?null:v,unit:x.pick.unit}}const k=r.steps.indexOf(x),tot=stepTotal(b,k,x),of=x.tally.reduce((a,y)=>a+y[1],0);
     return {step:x.name,rows:x.tally.map(([l,o],j)=>[l,tallyOf(b,k,j),o]),total:tot,of,pass:x.pass!=null?tot>=x.pass:null}})}
 
 function paint(){
@@ -260,7 +263,7 @@ function sumView(id){
   return `<header><h1>Session Done</h1><p class="sub">${esc(Store.fmtDate(rows[0].date,{weekday:"long",month:"short",day:"numeric"}))}</p></header>
   <section class="panel r-sum"><div class="label">Practiced</div><div class="r-big">${tot} min</div>
     <ol class="s-steps">${rows.map(x=>`<li class="${x.done?"done":"skip"}"><span>${esc(x.title)}</span><small>${x.done?"✓ ":"Not done · "}${x.min} min</small></li>`).join("")}</ol>
-    ${rows.filter(x=>x.results&&x.results.length).map(x=>`<div class="label">${esc(x.title)}</div><ul class="s-res">${x.results.map(rr=>`<li><div><b>${esc(rr.step)}</b><span class="${rr.pass===false?"bad":rr.pass?"good":""}">${rr.total}/${rr.of}${rr.pass==null?"":rr.pass?" ✓ passed":" ✗ not passed"}</span></div>${rr.rows.length>1?`<small>${rr.rows.map(([l,v,o])=>`${esc(l)} ${v}/${o}`).join(" · ")}</small>`:""}</li>`).join("")}</ul>`).join("")}
+    ${rows.filter(x=>x.results&&x.results.length).map(x=>`<div class="label">${esc(x.title)}</div><ul class="s-res">${x.results.map(rr=>rr.pick?`<li><div><b>${esc(rr.step)}</b><span>${rr.value==null?"—":rr.value+" "+esc(rr.unit)}</span></div><small>${esc(rr.pick)}</small></li>`:`<li><div><b>${esc(rr.step)}</b><span class="${rr.pass===false?"bad":rr.pass?"good":""}">${rr.total}/${rr.of}${rr.pass==null?"":rr.pass?" ✓ passed":" ✗ not passed"}</span></div>${rr.rows.length>1?`<small>${rr.rows.map(([l,v,o])=>`${esc(l)} ${v}/${o}`).join(" · ")}</small>`:""}</li>`).join("")}</ul>`).join("")}
     ${rows.some(x=>x.games.length)?`<div class="label">Games</div><div class="r-list">${rows.flatMap(x=>x.games).map(P.gameRow).join("")}</div>`:""}
     <p class="hint">Done sessions are highlighted on this week's plan.</p></section>
   <div class="row"><a class="play" href="#practice">Done</a><a class="ghost" href="#notes" style="display:inline-flex;align-items:center">Update My Notes</a></div>`;
@@ -286,6 +289,7 @@ const act={
 
   pickr(el){if(!run)return;const b=blk();b.r=el.dataset.r||null;b.st=0;b.stAt=elapsed();b.tally={};saveRun();P.render()},
   step(el){if(!run)return;const b=blk(),r=ROUTINES[b.r];if(!r||!r.steps)return;b.st=Math.max(0,Math.min(r.steps.length-1,(b.st||0)+ +el.dataset.v));b.stAt=elapsed();saveRun();P.render();window.scrollTo(0,0)},
+  pick(el){if(!run)return;const b=blk(),i=+el.dataset.i,v=+el.dataset.v;b.pick=b.pick||{};b.pick[i]=b.pick[i]===v?null:v;saveRun();P.render()},
   tal(el){if(!run)return;const b=blk(),r=ROUTINES[b.r],i=+el.dataset.i,j=+el.dataset.j,of=r.steps[i].tally[j][1];
     b.tally=b.tally||{};const t=b.tally[i]=b.tally[i]||{};t[j]=Math.max(0,Math.min(of,(t[j]||0)+ +el.dataset.v));saveRun();P.render()},
   launch(el){let o={};try{o=JSON.parse(el.dataset.o||"{}")}catch(e){}P.launch(el.dataset.k,o)},
