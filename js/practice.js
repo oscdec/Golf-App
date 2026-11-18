@@ -15,7 +15,7 @@ const AVG_N=12;
 
 function shuffle(a){a=[...a];for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a}
 const CLUBS=["PW","9i","8i","7i","6i","5i","4i","5w","Mini driver"];
-const LADDERS={wedges:[40,50,60,70,80,90,100],irons:[120,135,150,165,175,185,195]};
+const LADDERS={wedges30:[30,40,50,60,70,80,90,100],irons:[120,135,150,165,175,185,195],wedges:[40,50,60,70,80,90,100]};  /* "wedges" = the old 40-yard ladder, kept so past games still replay */
 const COMBINE=[3,12,4,11,5,10,6,9,7,8];
 const BENCH=[["Scratch",0,29.79],["5 hcp",5,31.03],["10 hcp",10,31.95],["15 hcp",15,32.91],["20 hcp",20,33.88]];
 
@@ -23,8 +23,13 @@ const BENCH=[["Scratch",0,29.79],["5 hcp",5,31.03],["10 hcp",10,31.95],["15 hcp"
    short game (inside 50 yards) average proximity, shots to finish and up-and-down %. 10-handicap short-game
    values weren't published: they are halfway between 5 and 15 (marked "est."). */
 const HC=[0,5,10,15,20,25],HC_LABEL=["Scratch","5 hcp","10 hcp","15 hcp","20 hcp","25 hcp"];
-const APPROACH={b50:[26,36,41,48,49,57],b100:[38,50,57,72,81,91],b150:[54,82,92,122,132,168]};
-const BAND_NAME={b50:"50–100 yd",b100:"100–150 yd",b150:"150–200 yd"};
+const APPROACH={b50:[26,36,41,48,49,57],b100:[38,50,57,72,81,91],b150:[54,82,92,122,132,168],
+  /* 30–40 yd: Lou Stagner's Arccos medians from the rough (newsletter #27), handicaps 0–20, mean of his 30 and 40-yard rows
+     (30: 14.8, 16.9, 19.9, 21.5, 24.5; 40: 17.0, 20.2, 24.2, 26.4, 29.1). Compared against the median of my shots. */
+  b30:[15.9,18.6,22.1,24.0,26.8]};
+const MEDIAN_BANDS={b30:true};
+const BAND_NAME={b30:"30–40 yd",b50:"50–100 yd",b100:"100–150 yd",b150:"150–200 yd"};
+const median=a=>{const b=[...a].sort((x,y)=>x-y),m=b.length>>1;return b.length%2?b[m]:(b[m-1]+b[m])/2};
 const SG_PROX=[11,14,16,18,20,22],SG_FINISH=[2.45,2.55,2.665,2.78,2.86,3.01],SG_UD=[54,47,39,34,31,25];
 const CHIP_ZONES=[["Holed",0],["Inside 3 ft",2],["3–6 ft",4.5],["6–10 ft",8],["10–15 ft",12.5],["15–20 ft",17.5],["20–30 ft",25],["30 ft +",35],["Off the green",40]];
 const CHIP_CALL={Short:"Under 10 yards, just off the green",Medium:"About 10–20 yards",Long:"About 20–30 yards"};
@@ -32,11 +37,11 @@ const r1=v=>Math.round(v*10)/10;
 /* The handicap a value "plays like": interpolate along a benchmark row (lower values are better).
    Beyond the ends the nearest segment's slope continues; negative means a plus handicap. */
 function playsLike(v,row){
-  let i=0;if(v<=row[0])i=0;else if(v>=row[5])i=4;else while(i<4&&v>row[i+1])i++;
+  const n=row.length;let i=0;if(v<=row[0])i=0;else if(v>=row[n-1])i=n-2;else while(i<n-2&&v>row[i+1])i++;
   const lo=row[i],hi=row[i+1],h=hi===lo?HC[i]:HC[i]+5*(v-lo)/(hi-lo);
   return Math.max(-6,Math.min(36,h));
 }
-const benchAt=(row,h)=>{h=Math.max(0,Math.min(25,h));const i=Math.min(4,Math.floor(h/5));return row[i]+(row[i+1]-row[i])*(h-HC[i])/5};
+const benchAt=(row,h)=>{const n=row.length;h=Math.max(0,Math.min(5*(n-1),h));const i=Math.min(n-2,Math.floor(h/5));return row[i]+(row[i+1]-row[i])*(h-HC[i])/5};
 const fmtHcp=v=>v==null?"—":(v<0?"+"+(-v).toFixed(1):v.toFixed(1))+" hcp";
 const myIndex=()=>window.Rounds&&Rounds.index?Rounds.index():null;
 const prox=(e,t)=>3*Math.hypot(e.c-t,e.o);   /* yards -> feet from the target */
@@ -46,15 +51,15 @@ function proxReplay(order,log,bandOf,drv){
     if(t==="D")return {t,e,drive:true,solid:e.c>=drv-30&&Math.abs(e.o)<=20};
     return {t,e,ft:prox(e,t),band:bandOf(t)}});
   const ir=shots.filter(x=>!x.drive),bands={};
-  ir.forEach(x=>{(bands[x.band]=bands[x.band]||{n:0,sum:0}).n++;bands[x.band].sum+=x.ft});
-  let w=0,acc=0;Object.entries(bands).forEach(([k,b])=>{b.avg=b.sum/b.n;b.hc=playsLike(b.avg,APPROACH[k]);w+=b.n;acc+=b.hc*b.n});
+  ir.forEach(x=>{const b=bands[x.band]=bands[x.band]||{n:0,sum:0,fts:[]};b.n++;b.sum+=x.ft;b.fts.push(x.ft)});
+  let w=0,acc=0;Object.entries(bands).forEach(([k,b])=>{b.med=!!MEDIAN_BANDS[k];b.avg=b.med?median(b.fts):b.sum/b.n;b.hc=playsLike(b.avg,APPROACH[k]);w+=b.n;acc+=b.hc*b.n});
   const dr=shots.filter(x=>x.drive);
   return {n:log.length,shots,ir,dr,bands,solid:dr.filter(x=>x.solid).length,hc:w?r1(acc/w):null};
 }
 
 /* ---------- game definitions ---------- */
 const G={
-  safe:{name:"Safe Side",kind:"Full swing",better:"high",
+  safe:{name:"Safe Side",kind:"Full Swing",better:"high",
     blurb:"18 shots, every club as a draw and a fade, in random order. Pick a flag and a safe side; the other side of the flag is forbidden.",
     rules:["Pick a flag and choose which side is your safe miss. A line straight through the flag makes the other side forbidden.","The app picks each shot: club and shape, 9 clubs from PW to mini driver, each once as a draw and once as a fade.","Sweet spot, within about 5 yards on the safe side: +3. Safe miss, further out on the safe side: +1. Forbidden side, even by inches: −4."],
     variant:()=>"safe",label:()=>"",
@@ -76,12 +81,12 @@ const G={
     start:()=>({seq:[...COMBINE,...COMBINE]}),
     replay:(s,log)=>({n:log.length,total:sum(log),done:log.length>=20,result:sum(log)}),
     fmt:v=>v+" putts"},
-  ladder:{name:"Distance Ladder",kind:"Wedges & irons",better:"low",
-    blurb:"Climb 7 targets, one hit at a time. Fewer balls is better.",
-    rules:["Wedges: 40 to 100 yards. Irons: 120 to 195 yards. 7 rungs each.","Hit the current target to climb a rung.","Normal: a miss drops you one rung. Hard: a miss sends you back to the start.","Wedges and irons, normal and hard, are tracked separately."],
-    opts:{set:[["wedges","Wedges"],["irons","Irons"]],mode:[["normal","Normal"],["hard","Hard"]]},
-    variant:s=>`ladder-${s.set}-${s.mode}`,label:s=>`${s.set==="irons"?"Irons":"Wedges"} · ${s.mode==="hard"?"Hard":"Normal"}`,
-    start:o=>({set:o.set||"wedges",mode:o.mode||"normal"}),
+  ladder:{name:"Distance Ladder",kind:"Wedges & Irons",better:"low",
+    blurb:"Climb the targets one hit at a time: wedges from 30 yards, irons from 120. Fewer balls is better.",
+    rules:["Wedges: 30 to 100 yards, 8 rungs. Irons: 120 to 195 yards, 7 rungs.","Hit the current target to climb a rung.","Normal: a miss drops you one rung. Hard: a miss sends you back to the start.","Wedges and irons, normal and hard, are tracked separately."],
+    opts:{set:[["wedges30","Wedges"],["irons","Irons"]],mode:[["normal","Normal"],["hard","Hard"]]},
+    variant:s=>`ladder-${s.set}-${s.mode}`,label:s=>`${s.set==="irons"?"Irons":s.set==="wedges"?"Wedges (from 40)":"Wedges"} · ${s.mode==="hard"?"Hard":"Normal"}`,
+    start:o=>({set:o.set==="wedges"?"wedges30":(o.set||"wedges30"),mode:o.mode||"normal"}),
     replay:(s,log)=>{const L=LADDERS[s.set];let r=0;log.forEach(h=>{if(h)r++;else r=s.mode==="hard"?0:Math.max(0,r-1)});
       return {rung:r,balls:log.length,done:r>=L.length,result:log.length,L}},
     fmt:v=>v+" ball"+(v===1?"":"s")},
@@ -92,7 +97,7 @@ const G={
     start:()=>({}),
     replay:(s,log)=>{const pts=log.map((v,i)=>v*(i>=11?2:1));return {n:log.length,total:sum(pts),done:log.length>=14,result:sum(pts)}},
     fmt:v=>sgn(v)+" pts"},
-  range:{name:"Range Round",kind:"Full swing",better:"low",
+  range:{name:"Range Round",kind:"Full Swing",better:"low",
     blurb:"Play a course you know in your head: a tee shot and an approach on every hole.",
     rules:["Pick the tee shot and approach club for each hole, as if playing a course you know.","Both shots hit: birdie. One hit: par. Neither: bogey. Tee shot past the penalty line: double bogey, whatever the approach.","Full routine on every shot, and never the same club twice in a row.","9- and 18-hole rounds are tracked separately."],
     opts:{holes:[["9","9 holes"],["18","18 holes"]]},
@@ -101,7 +106,7 @@ const G={
     replay:(s,log)=>{const sc=log.map(h=>h.t==="p"?2:(h.t==="h")+(h.a==="h")===2?-1:(h.t==="h")+(h.a==="h")===1?0:1);
       return {n:log.length,scores:sc,total:sum(sc),done:log.length>=s.holes,result:sum(sc)}},
     fmt:v=>toPar(v)},
-  must:{name:"Must-Make Exit",kind:"Full swing",better:"low",
+  must:{name:"Must-Make Exit",kind:"Full Swing",better:"low",
     blurb:"You can't leave until you hit X in a row to one target, 125–160 yards. Fewer balls is better.",
     rules:["Pick how many in a row and a target from 125 to 160 yards. Use whatever club fits.","A miss resets the streak to zero.","Each \"in a row\" number is tracked separately. Good as the last drill of a session."],
     opts:{x:[["2","2 in a row"],["3","3 in a row"],["4","4 in a row"],["5","5 in a row"]],dist:"range"},
@@ -109,21 +114,21 @@ const G={
     start:o=>({x:+(o.x||3),dist:+(o.dist||150)}),
     replay:(s,log)=>{let st=0;log.forEach(h=>{st=h?st+1:0});return {streak:st,balls:log.length,done:st>=s.x,result:log.length}},
     fmt:v=>v+" ball"+(v===1?"":"s")},
-  bsc:{name:"Ball-Striking Combine",kind:"Full swing · launch monitor",better:"low",bench:true,
+  bsc:{name:"Ball-Striking Combine",kind:"Full Swing · Launch Monitor",better:"low",bench:true,
     blurb:"24 balls: irons to six targets from 110 to 185 yards, plus 6 drives, in random order. Your result is the handicap your iron proximity plays like.",
     rules:["One ball at a time with your full routine. The app calls every shot.","Irons: 3 balls each at 110, 125, 140, 155, 170 and 185 yards. Enter carry and offline from the SkyTrak; the app works out how many feet you finished from the target.","Drives: 6, aimed at the middle. A solid drive carries within 30 yards of your normal driver carry and finishes within 20 yards of center (Lou Stagner's definition).","Result: the handicap your average proximity plays like, against Shot Scope's on-course averages for 100–150 and 150–200 yards. Range lies are easier than the course, so expect it to flatter you a little.","Blow-ups: iron shots more than double the average for your handicap."],
     opts:{drv:"drv"},variant:()=>"bsc",label:()=>"",
     start:o=>({order:shuffle([...[110,125,140,155,170,185].flatMap(y=>[y,y,y]),"D","D","D","D","D","D"]),drv:+(o.drv||240)}),
     replay:(s,log)=>{const r=proxReplay(s.order,log,t=>t<=150?"b100":"b150",s.drv);return {...r,done:log.length>=24,result:r.hc}},
     fmt:fmtHcp},
-  wedge:{name:"Wedge Combine",kind:"Wedges · launch monitor",better:"low",bench:true,
-    blurb:"24 wedges from 50 to 120 yards in random order. Your result is the handicap your proximity plays like.",
-    rules:["One ball at a time with your full routine. The app calls every shot: 3 balls each at 50, 60, 70, 80, 90, 100, 110 and 120 yards.","Enter carry and offline from the SkyTrak; the app works out how many feet you finished from the target.","Result: the handicap your average proximity plays like, against Shot Scope's on-course averages for 50–100 and 100–150 yards. Range lies are easier than the course, so expect it to flatter you a little.","Also shown: how many finished inside 15 feet, and blow-ups (more than double the average for your handicap)."],
-    variant:()=>"wedge",label:()=>"",
-    start:()=>({order:shuffle([50,60,70,80,90,100,110,120].flatMap(y=>[y,y,y]))}),
-    replay:(s,log)=>{const r=proxReplay(s.order,log,t=>t<=100?"b50":"b100",0);return {...r,done:log.length>=24,result:r.hc}},
+  wedge:{name:"Wedge Combine",kind:"Wedges · Launch Monitor",better:"low",bench:true,
+    blurb:"24 wedges from 30 to 120 yards in random order. Your result is the handicap your proximity plays like.",
+    rules:["One ball at a time with your full routine. The app calls every shot: 3 balls each at 30, 40, 50, 60, 75, 90, 105 and 120 yards.","Enter carry and offline from the SkyTrak; the app works out how many feet you finished from the target.","Result: the handicap your proximity plays like. 30–40 yards: your median against Lou Stagner's Arccos medians (from the rough). 50–100 and 100–150 yards: your average against Shot Scope's on-course averages. Range lies are easier than the course, so expect it to flatter you a little.","Also shown: how many finished inside 15 feet, and blow-ups (more than double the average for your handicap)."],
+    variant:s=>s&&s.order&&s.order.includes(30)?"wedge30":"wedge",label:()=>"",
+    start:()=>({order:shuffle([30,40,50,60,75,90,105,120].flatMap(y=>[y,y,y]))}),
+    replay:(s,log)=>{const r=proxReplay(s.order,log,t=>t<50?"b30":t<=100?"b50":"b100",0);return {...r,done:log.length>=24,result:r.hc}},
     fmt:fmtHcp},
-  chipc:{name:"Chipping Combine",kind:"Chipping · no putting",better:"low",
+  chipc:{name:"Chipping Combine",kind:"Chipping · No Putting",better:"low",
     blurb:"18 chips from short, medium and long spots. No putting: just mark where each one finishes. Compare your average leave to scratch through 25 handicaps.",
     rules:["The app calls each chip: short (under 10 yards, just off the green), medium (about 10–20 yards) or long (about 20–30 yards), 6 of each in random order.","Toss the ball and play the lie you get. Change holes every chip.","Tap where the ball finished. Quick measures: a flagstick is about 7 feet, a putter about 3 feet, a long stride about 3 feet.","Result: your average leave in feet, against Shot Scope's on-course averages from inside 50 yards. Off the green counts as 40 feet and as a double chip."],
     variant:()=>"chipc",label:()=>"",
@@ -131,14 +136,14 @@ const G={
     replay:(s,log)=>{const ft=log.map(z=>CHIP_ZONES[z][1]),avg=log.length?sum(ft)/log.length:0;
       return {n:log.length,avg,in6:log.filter(z=>z<=2).length,dc:log.filter(z=>z===8).length,done:log.length>=18,result:r1(avg)}},
     fmt:v=>(+v).toFixed(1)+" ft"},
-  updown:{name:"Up-and-Down 18",kind:"Chipping & putting",better:"low",
+  updown:{name:"Up-and-Down 18",kind:"Chipping & Putting",better:"low",
     blurb:"18 holes from around the green, holed out. For days the facility lets you chip and putt.",
     rules:["12 holes from inside 25 yards and 6 from 25–50 yards, in random order. One ball per hole.","Toss the ball and play the lie you get. New hole every time, and hole out every putt.","Enter the strokes for each hole. If the chip missed the green, tap that first: it's a double chip.","Result: total strokes, against Shot Scope's average shots to finish from inside 50 yards, times 18."],
     variant:()=>"updown",label:()=>"",
     start:()=>({order:shuffle([..."IIIIIIIIIIII","O","O","O","O","O","O"])}),
     replay:(s,log)=>({n:log.length,total:sum(log.map(e=>e.s)),ud:log.filter(e=>e.s<=2).length,dc:log.filter(e=>e.dc).length,done:log.length>=18,result:sum(log.map(e=>e.s))}),
     fmt:v=>v+" strokes"},
-  skytrak:{name:"SkyTrak Combine",kind:"Full swing · log a result",better:"high",
+  skytrak:{name:"SkyTrak Combine",kind:"Full Swing · Log A Result",better:"high",
     blurb:"Took the combine in the SkyTrak app? Log its score here so all your results live in one place.",
     rules:["Run the combine in the SkyTrak app.","Enter the overall score and the handicap SkyTrak shows. More calculations can come later."],
     variant:()=>"skytrak",label:()=>"",
@@ -187,17 +192,17 @@ function home(){
   const g=active();
   const card=k=>{const d=G[k],mine=games.filter(x=>x.game===k&&x.status!=="active").sort((a,b)=>b.finishedAt-a.finishedAt);
     const last=mine[0];
-    const sub=last?`Last: ${last.status==="failed"?"Failed":d.fmt(last.result)}${d.label(last.setup)?" · "+d.label(last.setup):""}`:"Not played yet";
+    const sub=last?`Last ${Store.fmtDate(last.date,{month:"short",day:"numeric"})}: ${last.status==="failed"?"Failed":d.fmt(last.result)}${d.label(last.setup)?" · "+d.label(last.setup):""}`:"Not played yet";
     return `<a class="r-row p-game" href="#practice/g/${k}"><span class="r-name">${esc(d.name)}<small>${esc(d.kind)} · ${esc(sub)}</small></span><span class="p-go">›</span></a>`};
   const cards=GROUPS.map(([lbl,ks])=>`<div class="label p-grp">${esc(lbl)}</div>${ks.map(card).join("")}`).join("");
   return `<header><h1>Practice</h1></header>
   ${Sessions.homeCard()}
-  ${g?`<section class="panel r-active"><span class="pill live">In progress</span><div class="r-title">${esc(G[g.game].name)}<small>${esc(G[g.game].label(g.setup))}</small></div>
-    <div class="row"><button class="play" data-act="resume">Resume</button><button class="ghost" data-act="quit">Discard game</button></div></section>`:""}
+  ${g?`<section class="panel r-active"><span class="pill live">In Progress</span><div class="r-title">${esc(G[g.game].name)}<small>${esc(G[g.game].label(g.setup))}</small></div>
+    <div class="row"><button class="play" data-act="resume">Resume</button><button class="ghost" data-act="quit">Discard Game</button></div></section>`:""}
   ${Sessions.weekCard()}
-  <section class="r-list"><div class="label">Games</div>${cards}</section>
-  <section class="panel soon"><span class="pill">Coming next</span><h2>Routines</h2>
-    <ul><li>Standard Ball Striking, Technical Chipping and Technical Putting, step by step inside their sessions</li><li>Build your own plan for a day</li><li>Practice time by discipline over any date range</li></ul></section>`;
+  <section class="r-list"><h2 class="p-h2">Games</h2>${cards}</section>
+  <section class="panel soon"><span class="pill">Coming Next</span><h2>More Practice Tools</h2>
+    <ul><li>Build your own plan for a day</li><li>Practice time by discipline over any date range</li></ul></section>`;
 }
 
 /* ---------- game intro: rules, setup, average, history ---------- */
@@ -231,7 +236,7 @@ function intro(k){
       <p class="hint">Beat ${fmtAvg(k,st.avg)} to win today.</p>`
     :`<p class="hint">No finished games yet${d.label(setup)?" for "+esc(d.label(setup)):""}. Your first one sets the average to beat.</p>`}</section>
   ${busy?`<p class="hint r-center">Finish or discard the game in progress (${esc(G[busy.game].name)}) first.</p>`:`<button class="play r-wide" data-act="begin" data-k="${k}">Start</button>`}
-  <details class="panel p-rules"><summary class="label">How it works</summary><ul>${d.rules.map(r=>`<li>${esc(r)}</li>`).join("")}</ul></details>
+  <details class="panel p-rules"><summary class="label">How It Works</summary><ul>${d.rules.map(r=>`<li>${esc(r)}</li>`).join("")}</ul></details>
   ${hist?`<section class="r-list"><div class="label">History</div>${hist}</section>`:""}`;
 }
 
@@ -284,7 +289,7 @@ function play(g){
       <label class="r-field"><span class="label">Offline (yd)</span><input class="r-input b-in" id="bOff" type="number" inputmode="decimal" step="0.1" min="0" max="150" placeholder="0" enterkeyhint="done"></label>
       <div class="r-opts b-side">${[["L","Left"],["R","Right"]].map(([v,l])=>`<button class="r-opt" data-act="side" data-v="${v}" aria-pressed="${side===v}">${l}</button>`).join("")}</div>
     </div>
-    <button class="play r-wide" data-act="shot">Save shot</button>
+    <button class="play r-wide" data-act="shot">Save Shot</button>
     ${lastShot?`<p class="hint r-center">Last: ${lastShot.drive?"drive":lastShot.t+" yd"} · carry ${r1(lastShot.e.c)}, ${r1(lastShot.e.o)}${lastShot.e.s?" "+lastShot.e.s:""} offline → ${lastShot.drive?(lastShot.solid?"solid":"not solid"):Math.round(lastShot.ft)+" ft"}</p>`:""}`;
   }else if(k==="chipc"){
     const c=g.setup.order[s.n];
@@ -296,19 +301,19 @@ function play(g){
     const c=g.setup.order[s.n];
     body=`<div class="p-head"><div class="label">Hole ${s.n+1} of 18 · ${s.total} strokes</div>${bar(s.n,18)}</div>
     <div class="p-call">${c==="I"?"Inside 25 yd":"25–50 yd"}<span>New hole, toss the ball, hole out</span></div>
-    <button class="r-opt c-dc" data-act="dc" aria-pressed="${dcNext}">Chip missed the green</button>
+    <button class="r-opt c-dc" data-act="dc" aria-pressed="${dcNext}">Chip Missed The Green</button>
     <div class="r-field"><div class="label">Strokes to hole out</div>${nums("ud",[1,2,3,4,5],null,6)}</div>
     ${s.n?`<div class="p-log">${g.log.map(e=>`<span class="${e.s<=2?"ok":e.s>=4?"no":""}">${e.s}${e.dc?"*":""}</span>`).join("")}</div><p class="hint">* chip missed the green</p>`:""}`;
   }else if(k==="skytrak"){
     body=`<div class="r-field"><label class="label" for="skScore">Combine score (0–100)</label><input class="r-input" id="skScore" type="number" inputmode="decimal" step="0.1" min="0" max="100" data-autofocus></div>
     <div class="r-field"><label class="label" for="skHcp">Handicap SkyTrak shows (optional)</label><input class="r-input" id="skHcp" type="text" inputmode="decimal" placeholder="e.g. 8.4 or +1.2"></div>
     <div class="r-field"><label class="label" for="skNote">Note (optional)</label><input class="r-input" id="skNote" type="text" placeholder="Targets, conditions…"></div>
-    <button class="play r-wide" data-act="sksave">Save result</button>`;
+    <button class="play r-wide" data-act="sksave">Save Result</button>`;
   }
   const st=stat(k,g.variant);
   return `${back("","Practice")}<header><h1>${esc(d.name)}</h1>${d.label(g.setup)?`<p class="sub">${esc(d.label(g.setup))}${st?" · average to beat "+fmtAvg(k,st.avg):""}</p>`:st?`<p class="sub">Average to beat ${fmtAvg(k,st.avg)}</p>`:""}</header>
   <section class="panel p-play">${body}</section>
-  <div class="row p-foot">${undo}${k==="lag"?`<button class="ghost danger" data-act="fail">End as failed</button>`:""}<button class="ghost" data-act="quit">Discard</button></div>`;
+  <div class="row p-foot">${undo}${k==="lag"?`<button class="ghost danger" data-act="fail">End As Failed</button>`:""}<button class="ghost" data-act="quit">Discard</button></div>`;
 }
 function nums(act,vals,cur,more){
   let s=vals.map(v=>`<button class="r-num" data-act="${act}" data-v="${v}">${v}</button>`).join("");
@@ -341,16 +346,16 @@ function result(g,fresh){
     const idx=myIndex(),ref=idx==null?10:idx,bands=Object.keys(s.bands).sort();
     const blow=s.ir.filter(x=>x.ft>2*benchAt(APPROACH[x.band],ref)).length;
     const in15=s.ir.filter(x=>x.ft<=15).length;
-    const rows=HC.map((h,i)=>[HC_LABEL[i],h,...bands.map(b=>APPROACH[b][i]+" ft")]);
+    const rows=HC.map((h,i)=>[HC_LABEL[i],h,...bands.map(b=>APPROACH[b][i]!=null?APPROACH[b][i]+" ft":"—")]);
     extra=`<section class="panel"><div class="label">Plays like</div><table class="p-bench"><tr class="hd"><th></th><td>Your average</td><td>Plays like</td></tr>
-      ${bands.map(b=>`<tr><th>${BAND_NAME[b]}</th><td>${Math.round(s.bands[b].avg)} ft</td><td>${fmtHcp(r1(s.bands[b].hc))}</td></tr>`).join("")}</table>
+      ${bands.map(b=>`<tr><th>${BAND_NAME[b]}</th><td>${Math.round(s.bands[b].avg)} ft${s.bands[b].med?" (median)":""}</td><td>${fmtHcp(r1(s.bands[b].hc))}</td></tr>`).join("")}</table>
       <p class="hint">${k==="wedge"?`Inside 15 ft: ${in15} of 24. `:""}Blow-ups (more than double the ${idx==null?"10-handicap":"your-handicap"} average): ${blow}.</p></section>
-    <section class="panel"><div class="label">On-course averages by handicap (Shot Scope)</div>${hcTable(bands.map(b=>BAND_NAME[b]),rows,idx)}
-      <p class="hint">${idx==null?"Add rounds or past GHIN scores so the app can highlight the rows around your index.":`Highlighted: the rows around your index of ${idx.toFixed(1)}.`} On-course shots come from all kinds of lies, so the range usually flatters you a little.</p></section>
+    <section class="panel"><div class="label">On-Course Benchmarks By Handicap</div>${hcTable(bands.map(b=>BAND_NAME[b]),rows,idx)}
+      <p class="hint">${idx==null?"Add rounds or past GHIN scores so the app can highlight the rows around your index.":`Highlighted: the rows around your index of ${idx.toFixed(1)}.`} ${bands.includes("b30")?"30–40 yd: Lou Stagner's Arccos medians from the rough (0–20 handicaps). Other bands: Shot Scope averages. ":""}On-course shots come from all kinds of lies, so the range usually flatters you a little.</p></section>
     ${k==="bsc"?`<section class="panel"><div class="label">Drives</div><div class="r-big">${s.solid} of 6 solid</div>
       <p class="hint">Solid: carry of ${g.setup.drv-30} yd or more and within 20 yd of center. Handicap benchmarks for this to come.</p>
       <div class="p-log">${s.dr.map(x=>`<span class="${x.solid?"ok":"no"}">${Math.round(x.e.c)} · ${r1(x.e.o)}${x.e.s||""}</span>`).join("")}</div></section>`:""}
-    <section class="panel"><div class="label">Shots (feet from target)</div><div class="p-shots">${s.ir.map(x=>`<span class="${x.ft<=benchAt(APPROACH[x.band],ref)/2?"ok":x.ft>2*benchAt(APPROACH[x.band],ref)?"no":""}"><b>${Math.round(x.ft)}</b>${x.t} yd</span>`).join("")}</div></section>`;
+    <section class="panel"><div class="label">Shots (Feet From Target)</div><div class="p-shots">${s.ir.map(x=>`<span class="${x.ft<=benchAt(APPROACH[x.band],ref)/2?"ok":x.ft>2*benchAt(APPROACH[x.band],ref)?"no":""}"><b>${Math.round(x.ft)}</b>${x.t} yd</span>`).join("")}</div></section>`;
   }else if(k==="chipc"){
     const idx=myIndex(),pl=playsLike(g.result,SG_PROX);
     const rows=HC.map((h,i)=>{const d=r1(SG_PROX[i]-g.result);return [HC_LABEL[i]+(h===10?" (est.)":""),h,SG_PROX[i]+" ft",`<span class="${d>=0?"good":"bad"}">${d>=0?"+":"−"}${Math.abs(d).toFixed(1)}</span>`]});
@@ -377,7 +382,8 @@ function result(g,fresh){
     <div class="r-scoreline"><span class="r-big">${g.status==="failed"?"Failed":esc(d.fmt(g.result))}</span></div>${verdict}
     ${now?`<p class="hint">Average now ${fmtAvg(k,now.avg)} over your last ${now.n} · best ${esc(d.fmt(now.best))}</p>`:""}</section>
   ${extra}
-  <div class="row r-actions">${fresh?`<a class="play" href="#practice${Sessions.running()?"/run":""}">${Sessions.running()?"Back to session":"Done"}</a>`:"<span></span>"}<button class="ghost danger" data-act="delgame" data-id="${g.id}">Delete</button></div>`;
+  ${g.countedFor?`<section class="panel s-count"><p class="s-donenote">✓ Counted as this week's ${esc(Sessions.title(g.countedFor))}</p></section>`:fresh&&!Sessions.running()&&g.status==="done"?(()=>{const m=Sessions.matchSession(k);return m?`<section class="panel s-count"><p class="hint">Played on its own, so it's logged under Extra Practice. Want it to count for this week's plan?</p><button class="ghost" data-act="countsess" data-s="${m}">Count As This Week's ${esc(Sessions.title(m))}</button></section>`:""})():""}
+  <div class="row r-actions">${fresh?`<a class="play" href="#practice${Sessions.running()?"/run":""}">${Sessions.running()?"Back To Session":"Done"}</a>`:"<span></span>"}<button class="ghost danger" data-act="delgame" data-id="${g.id}">Delete</button></div>`;
 }
 
 function hcTable(cols,rows,idx){
@@ -388,7 +394,7 @@ function hcTable(cols,rows,idx){
 /* ---------- actions ---------- */
 function finishIf(g){
   const s=G[g.game].replay(g.setup,g.log);
-  if(s.done){g.status="done";g.result=s.result;g.finishedAt=Date.now();save();Sessions.addGame(g.id);go("res/"+g.id+"/new",true);return true}
+  if(s.done){g.status="done";g.result=s.result;g.finishedAt=Date.now();save();if(Sessions.running())Sessions.addGame(g.id);else Sessions.logFree(g,G[g.game].name);go("res/"+g.id+"/new",true);return true}
   save();return false;
 }
 const act={
@@ -409,6 +415,7 @@ const act={
   sksave(){const g=active();if(!g)return;const si=root.querySelector("#skScore"),score=parseFloat(si.value);
     if(!(score>=0&&score<=100)){si.focus();si.classList.add("bad");return}
     g.log=[{score,hcp:root.querySelector("#skHcp").value.trim(),note:root.querySelector("#skNote").value.trim()}];finishIf(g)},
+  countsess(el){const id=(route()||[])[1],g=games.find(x=>x.id===id);if(!g)return;g.countedFor=el.dataset.s;save();Sessions.countGame(g.id,el.dataset.s);render()},
   dist(el){opts.dist=Math.max(125,Math.min(160,(+opts.dist||150)+ +el.dataset.v));render()},
   begin(el){
     if(active()){go("play");return}
@@ -423,7 +430,7 @@ const act={
   appr(el){const g=active();if(!g||!pendingTee)return;g.log.push({t:pendingTee,a:el.dataset.v});pendingTee=null;if(!finishIf(g))render()},
   undo(){const g=active();if(!g)return;if(pendingTee){pendingTee=null}else if(g.game==="updown"&&dcNext){dcNext=false}else g.log.pop();side="";save();render()},
   fail(){const g=active();if(!g)return;if(!confirm("End this game as failed? It's saved but left out of your average."))return;
-    const s=G.lag.replay(g.setup,g.log);g.status="failed";g.result=null;g.passed=s.passed;g.finishedAt=Date.now();save();Sessions.addGame(g.id);go("res/"+g.id+"/new",true)},
+    const s=G.lag.replay(g.setup,g.log);g.status="failed";g.result=null;g.passed=s.passed;g.finishedAt=Date.now();save();if(Sessions.running())Sessions.addGame(g.id);else Sessions.logFree(g,G[g.game].name);go("res/"+g.id+"/new",true)},
   delgame(el){if(confirm("Delete this game for good?")){const g=games.find(x=>x.id===el.dataset.id);games=games.filter(x=>x!==g);save();go(g?"g/"+g.game:"",true)}},
 };
 root.addEventListener("click",e=>{const el=e.target.closest("[data-act]");if(!el||!root.contains(el))return;const f=act[el.dataset.act]||Sessions.act[el.dataset.act];if(f){e.preventDefault();f(el)}});

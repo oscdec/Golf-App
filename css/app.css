@@ -430,3 +430,33 @@ a.play{display:inline-block;text-align:center}
 .s-res li span{font:600 1rem var(--f-mono)}
 .s-res .good{color:var(--back)} .s-res .bad{color:var(--down)}
 .s-res small{color:var(--muted);font-size:.85rem}
+
+/* week card: drag handle and link inside each session row */
+.s-sess{grid-template-columns:auto 1fr;padding:0;gap:0}
+.s-link{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center;text-decoration:none;color:inherit;padding:8px 10px 8px 2px;min-height:44px}
+.s-grip{display:grid;place-items:center;width:34px;align-self:stretch;cursor:grab;touch-action:none;color:var(--muted);border-radius:8px 0 0 8px}
+.s-grip svg{width:12px;height:20px;fill:currentColor}
+.s-sess.done .s-grip{color:inherit;opacity:.8}
+.s-ghost{position:fixed;z-index:50;pointer-events:none;box-shadow:0 10px 28px rgba(0,0,0,.28);transform:scale(1.02);opacity:.96}
+.s-ph{border:2px dashed var(--back);border-radius:8px;background:var(--back-soft)}
+.s-dragging{display:none}
+body.s-isdrag{user-select:none;-webkit-user-select:none;cursor:grabbing}
+.s-day.drop{border-color:var(--back)}
+.s-optpill{font:600 .68rem/1 var(--f-body);font-style:normal;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);border:1px solid var(--line);border-radius:999px;padding:2px 6px;vertical-align:2px}
+.s-sess.done .s-optpill{color:inherit;border-color:currentColor}
+.s-sess.opt:not(.done){background:transparent;border:1px dashed var(--line)}
+.s-extra{background:transparent;border-style:dashed}
+.s-xrow{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:4px 0}
+.s-xrow small{display:inline;margin-left:8px;color:var(--muted);font-size:.8rem}
+.s-xrow b{font:600 .95rem var(--f-mono)}
+.s-count{display:grid;gap:10px}
+.s-count p{margin:0}
+
+/* section headings on the Practice home */
+.p-h2{font:700 1.9rem/1 var(--f-display);text-transform:uppercase;letter-spacing:.02em;margin:10px 0 2px}
+.r-list>.p-h2{margin-bottom:6px}
+
+/* Title Case: buttons, card titles and headings capitalize every word (sentences and notes stay as written) */
+button,.ghost,.r-opt,.p-btn,.r-back,.r-name,.s-name,.r-title,summary,h2,h3,.seg button,.install{text-transform:capitalize}
+.r-name small,.s-name small,.r-title small,.r-opt small,button small,.p-btn small,.s-optpill{text-transform:none}
+.s-optpill{text-transform:uppercase}
