@@ -256,7 +256,12 @@ function checkinCard(){
   else verdict="A pattern shows after a few sessions with both check-ins.";
   const t0=new Date(cut+"T00:00").getTime(),t1=new Date(Store.today()+"T00:00").getTime()+864e5;
   charts.push({kind:"ci",id:"iCI",list,t0,t1});
-  return `<div class="i-legend"><span><i style="background:var(--s1)"></i>Before practice</span><span><i style="background:var(--s2)"></i>After practice</span><span><b class="i-yes"></b>Yes</span><span><b class="i-no"></b>No</span></div>
+  return `<div class="i-key" aria-label="How to read this chart">
+      <div><span><i style="background:var(--s1)"></i>Before practice</span><span><i style="background:var(--s2)"></i>After practice</span></div>
+      <div class="i-k2"><svg width="16" height="22" viewBox="0 0 16 22" aria-hidden="true"><line x1="8" x2="8" y1="16" y2="6" class="i-link"/><circle cx="8" cy="16" r="4" fill="var(--s1)"/><circle cx="8" cy="6" r="4" fill="var(--s2)"/></svg><span>Orange above blue: you finished happier</span></div>
+      <div class="i-k2"><svg width="16" height="22" viewBox="0 0 16 22" aria-hidden="true"><line x1="8" x2="8" y1="6" y2="16" class="i-link"/><circle cx="8" cy="6" r="4" fill="var(--s1)"/><circle cx="8" cy="16" r="4" fill="var(--s2)"/></svg><span>Orange below blue: the session left you lower</span></div>
+      <div><svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><circle cx="7" cy="7" r="4.5" fill="var(--s1)"/></svg><span>Filled dot = Yes</span><svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><circle cx="7" cy="7" r="3.5" fill="var(--panel)" stroke="var(--s1)" stroke-width="1.75"/></svg><span>Ring = No</span></div>
+      <p class="hint">Each column is one session, oldest on the left. For "Golf in the way of real life?", Yes is the one to watch. Tap any session to see all its answers.</p></div>
     <div class="i-chart" id="iCI" role="img" aria-label="Check-in answers before and after ${list.length} practice sessions over the last ${CI_DAYS} days"></div>
     <div class="stats i-stats">
       <div class="stat"><div class="label">Before</div><div class="v">${bAvg==null?"—":bAvg.toFixed(1)}</div><div class="hint">avg happiness</div></div>
