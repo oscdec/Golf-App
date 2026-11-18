@@ -228,6 +228,7 @@ function home(){
     return `<a class="r-row p-game" href="#practice/g/${k}"><span class="r-name">${esc(d.name)}<small>${esc(d.kind)} · ${esc(sub)}</small></span><span class="p-go">›</span></a>`};
   const cards=GROUPS.map(([lbl,ks])=>`<div class="label p-grp">${esc(lbl)}</div>${ks.map(card).join("")}`).join("");
   return `<header><h1>Practice</h1></header>
+  ${Sessions.weekTotal()}
   ${Sessions.homeCard()}
   ${g?`<section class="panel r-active"><span class="pill live">In Progress</span><div class="r-title">${esc(G[g.game].name)}<small>${esc(G[g.game].label(g.setup))}</small></div>
     <div class="row"><button class="play" data-act="resume">Resume</button><button class="ghost" data-act="quit">Discard Game</button></div></section>`:""}
