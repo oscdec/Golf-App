@@ -27,7 +27,7 @@ const APPROACH={b50:[26,36,41,48,49,57],b100:[38,50,57,72,81,91],b150:[54,82,92,
 const BAND_NAME={b50:"50–100 yd",b100:"100–150 yd",b150:"150–200 yd"};
 const SG_PROX=[11,14,16,18,20,22],SG_FINISH=[2.45,2.55,2.665,2.78,2.86,3.01],SG_UD=[54,47,39,34,31,25];
 const CHIP_ZONES=[["Holed",0],["Inside 3 ft",2],["3–6 ft",4.5],["6–10 ft",8],["10–15 ft",12.5],["15–20 ft",17.5],["20–30 ft",25],["30 ft +",35],["Off the green",40]];
-const CHIP_CALL={Short:"Just off the green",Medium:"About 10–20 yards",Long:"About 20–30 yards"};
+const CHIP_CALL={Short:"Under 10 yards, just off the green",Medium:"About 10–20 yards",Long:"About 20–30 yards"};
 const r1=v=>Math.round(v*10)/10;
 /* The handicap a value "plays like": interpolate along a benchmark row (lower values are better).
    Beyond the ends the nearest segment's slope continues; negative means a plus handicap. */
@@ -125,7 +125,7 @@ const G={
     fmt:fmtHcp},
   chipc:{name:"Chipping Combine",kind:"Chipping · no putting",better:"low",
     blurb:"18 chips from short, medium and long spots. No putting: just mark where each one finishes. Compare your average leave to scratch through 25 handicaps.",
-    rules:["The app calls each chip: short (just off the green), medium (about 10–20 yards) or long (about 20–30 yards), 6 of each in random order.","Toss the ball and play the lie you get. Change holes every chip.","Tap where the ball finished. Quick measures: a flagstick is about 7 feet, a putter about 3 feet, a long stride about 3 feet.","Result: your average leave in feet, against Shot Scope's on-course averages from inside 50 yards. Off the green counts as 40 feet and as a double chip."],
+    rules:["The app calls each chip: short (under 10 yards, just off the green), medium (about 10–20 yards) or long (about 20–30 yards), 6 of each in random order.","Toss the ball and play the lie you get. Change holes every chip.","Tap where the ball finished. Quick measures: a flagstick is about 7 feet, a putter about 3 feet, a long stride about 3 feet.","Result: your average leave in feet, against Shot Scope's on-course averages from inside 50 yards. Off the green counts as 40 feet and as a double chip."],
     variant:()=>"chipc",label:()=>"",
     start:()=>({order:shuffle(["Short","Medium","Long"].flatMap(x=>[x,x,x,x,x,x]))}),
     replay:(s,log)=>{const ft=log.map(z=>CHIP_ZONES[z][1]),avg=log.length?sum(ft)/log.length:0;

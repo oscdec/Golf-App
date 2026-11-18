@@ -11,7 +11,7 @@ const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&
 const clone=o=>JSON.parse(JSON.stringify(o));
 
 const SESS={
-  striking:{title:"Standard Ball Striking",min:60,disc:"Full swing",where:"Launch monitor",routine:true,notes:["driver","irons"]},
+  striking:{title:"Technical Ball Striking",min:60,disc:"Full swing",where:"Launch monitor",routines:["center","face"],notes:["driver","irons"]},
   bscombine:{title:"Ball-Striking Combine",min:30,disc:"Full swing",where:"Launch monitor",games:["bsc","skytrak"],notes:["driver","irons"]},
   wedgecombine:{title:"Wedge Combine",min:30,disc:"Wedges",where:"Launch monitor",games:["wedge"],notes:["wedges"]},
   wedge2:{title:"Wedge session",min:30,disc:"Wedges",where:"Launch monitor",games:["wedge",{k:"ladder",o:{set:"wedges"}}],notes:["wedges"]},
@@ -20,6 +20,20 @@ const SESS={
   chipgame:{title:"Chipping game",min:30,disc:"Chipping",where:"Practice facility",games:["chipc","updown"],notes:["chipping"]},
   puttgame:{title:"Putting game",min:30,disc:"Putting",where:"Practice facility",games:["combine","lag"],notes:["putting"]},
 };
+/* Routines: steps with their own minutes. A step can have drills (items) and a tally (row label, out of N),
+   with an optional pass mark. Center Strike / Startline is from Dane Cvetkovic's "one-hour range routine" Short;
+   the warm-up is our addition (the video's blocks add up to 50 minutes). */
+const ROUTINES={
+  center:{title:"Center Strike / Startline",steps:[
+    {name:"Warm-up",min:10,note:"Not in the video, added to fill the hour: easy swings, short clubs up to the 5-iron. Change or drop it."},
+    {name:"Technique",min:20,items:["10× Turn in the barrel","10× Width in transition","10× Head glued to wall"]},
+    {name:"Strike",min:10,prompt:"How many can you hit through the gate?",tip:"Gate: two tees (or similar) just outside the toe and heel of the club at address.",tally:[["9-iron",5],["7-iron",5],["5-iron",5]]},
+    {name:"Startline",min:10,prompt:"Can you start the ball on line?",tally:[["Draw",5],["Straight",5],["Fade",5]]},
+    {name:"Performance",min:10,prompt:"Visualize the first hole. Hit at least 5 of 10 in the fairway to pass.",tally:[["Fairways",10]],pass:5},
+  ]},
+  face:{title:"Face Control / Tempo",steps:null},
+};
+const rTitle=id=>ROUTINES[id]?ROUTINES[id].title:"";
 const SLOTS=[["mon","Monday","Mon"],["tue","Tuesday","Tue"],["wed","Wednesday","Wed"],["thu","Thursday","Thu"],["fri","Friday","Fri"],["wknd","Weekend · Sat or Sun","Weekend"]];
 const DEFAULT={mon:[],tue:["striking"],wed:["techchip","techputt"],thu:["bscombine","wedgecombine"],fri:["chipgame","puttgame"],wknd:["wedge2"]};
 let P={go(){},render(){},launch(){},gameName:k=>k,gameSub:()=>"",gameRow:()=>""};
@@ -47,7 +61,7 @@ function weekCard(){
     const ids=w.days[slot]||[];total+=ids.length;
     const dayDone=ids.length>0&&ids.every(id=>w.done[id]);
     const list=ids.map(id=>{const s=SESS[id],dn=!!w.done[id];if(dn)done++;
-      return `<a class="s-sess${dn?" done":""}" href="#practice/s/${id}"><span class="s-name">${esc(s.title)}<small>${s.min} min · ${esc(s.where)}</small></span><span class="s-mark">${dn?"✓ Done":"›"}</span></a>`}).join("");
+      return `<a class="s-sess${dn?" done":""}" href="#practice/s/${id}"><span class="s-name">${esc(s.title)}<small>${s.min} min · ${esc(s.where)}${s.routines?" · "+s.routines.map(rTitle).join(" or "):""}</small></span><span class="s-mark">${dn?"✓ Done":"›"}</span></a>`}).join("");
     return `<div class="s-day${dayDone?" done":""}${slot===today?" today":""}">
       <div class="s-dayhd"><span class="s-dname">${esc(name)}${slot===today?`<small>Today</small>`:""}</span>${ids.length?(dayDone?`<span class="s-donepill">✓ Done</span>`:`<button class="ghost sm" data-act="startday" data-slot="${slot}">Start</button>`):""}</div>
       ${list||`<p class="hint s-empty">${slot==="mon"?"Play day":"Nothing planned"}</p>`}</div>`;
@@ -63,7 +77,10 @@ function weekCard(){
 }
 
 const gamesOf=s=>(s.games||[]).map(g=>typeof g==="string"?{k:g,o:{}}:g);
+function routineOutline(id){const r=ROUTINES[id];if(!r)return "";
+  return r.steps?`<ol class="s-outline">${r.steps.map(st=>`<li><b>${esc(st.name)}</b> · ${st.min} min${st.items?": "+esc(st.items.join(", ")):st.prompt?": "+esc(st.prompt):""}</li>`).join("")}</ol>`:`<p class="hint">Steps to come.</p>`}
 function whatHtml(s){
+  if(s.routines)return `<p class="hint">Pick the routine when you start: ${s.routines.map(r=>esc(rTitle(r))).join(" or ")}.</p>${s.routines.map(r=>`<div class="label">${esc(rTitle(r))}</div>${routineOutline(r)}`).join("")}`;
   if(s.routine)return `<p class="hint">Routine to come: the steps for ${esc(s.title)} will show here once you add them. For now the session gives you the clock and your notes.</p>`;
   const g=gamesOf(s);
   return `<p class="hint">${g.length>1?"Play one of: ":"Game: "}${g.map(x=>esc(P.gameName(x.k,x.o))).join(" or ")}.</p>`;
@@ -132,11 +149,41 @@ function runView(){
     <button class="ghost" data-act="pause">${paused?"Resume":"Pause"}</button>
     ${last?"":`<button class="ghost" data-act="skip">Skip block</button>`}
     <button class="ghost danger" data-act="endrun">End now</button></div>
-  <section class="panel s-what">${s.routine?whatHtml(s):`<div class="label">${gamesOf(s).length>1?"Pick a game":"Game"}</div><div class="r-list">${games}</div>`}
-    ${played?`<div class="label">Played this block</div><div class="r-list">${played}</div>`:""}</section>
+  ${s.routines?routinePanel(s,b):`<section class="panel s-what">${s.routine?whatHtml(s):`<div class="label">${gamesOf(s).length>1?"Pick a game":"Game"}</div><div class="r-list">${games}</div>`}
+    ${played?`<div class="label">Played this block</div><div class="r-list">${played}</div>`:""}</section>`}
   ${notes?`<section class="panel s-notes"><div class="s-noteshd"><div class="label">Your notes</div><a class="ghost sm" href="#notes">Edit in Notes</a></div>${notes}</section>`:""}
   ${run.blocks.length>1?`<section class="panel"><div class="label">Today's blocks</div><ol class="s-steps">${steps}</ol></section>`:""}`;
 }
+
+/* Routine inside a block: pick it, then step through with a countdown per step and tap counters. */
+const tallyOf=(b,i,j)=>((b.tally||{})[i]||{})[j]||0;
+const stepTotal=(b,i,st)=>(st.tally||[]).reduce((t,_,j)=>t+tallyOf(b,i,j),0);
+function routinePanel(s,b){
+  if(b.r==null)return `<section class="panel s-what"><div class="label">Which routine today?</div>
+    <div class="r-list">${s.routines.map(id=>`<button class="r-row p-game" data-act="pickr" data-r="${id}"><span class="r-name">${esc(rTitle(id))}<small>${ROUTINES[id].steps?ROUTINES[id].steps.map(x=>x.name+" "+x.min).join(" · "):"Steps to come"}</small></span><span class="p-go">›</span></button>`).join("")}</div></section>`;
+  const r=ROUTINES[b.r],touched=Object.keys(b.tally||{}).length>0;
+  const change=!touched&&!(b.st>0)?`<button class="ghost sm" data-act="pickr" data-r="">Change routine</button>`:"";
+  if(!r.steps)return `<section class="panel s-what"><div class="s-rhd"><div class="label">${esc(r.title)}</div>${change}</div><p class="hint">Steps for this routine are still to come. The session clock and your notes work as usual.</p></section>`;
+  const i=b.st||0,st=r.steps[i],n=r.steps.length;
+  const tally=(st.tally||[]).map(([l,of],j)=>{const v=tallyOf(b,i,j);
+    return `<div class="s-tally"><span>${esc(l)}</span><div class="stepper"><button data-act="tal" data-i="${i}" data-j="${j}" data-v="-1" aria-label="One fewer ${esc(l)}">−</button><output>${v} / ${of}</output><button data-act="tal" data-i="${i}" data-j="${j}" data-v="1" aria-label="One more ${esc(l)}">+</button></div></div>`}).join("");
+  const tot=stepTotal(b,i,st),of=(st.tally||[]).reduce((t,x)=>t+x[1],0);
+  const pass=st.pass!=null?`<p class="s-pass ${tot>=st.pass?"ok":""}">${tot>=st.pass?"✓ Passed":`${st.pass-tot} more to pass`} · ${tot} of ${of}</p>`:st.tally?`<p class="hint">Total ${tot} of ${of}</p>`:"";
+  const list=r.steps.map((x,k)=>{const t=x.tally?` · ${stepTotal(b,k,x)}/${x.tally.reduce((a,y)=>a+y[1],0)}`:"";
+    return `<li class="${k<i?"done":k===i?"cur":""}"><span>${esc(x.name)}</span><small>${x.min} min${t}</small></li>`}).join("");
+  return `<section class="panel s-what s-routine">
+    <div class="s-rhd"><div class="label">${esc(r.title)} · step ${i+1} of ${n}</div>${change}</div>
+    <h2 class="s-stepname">${esc(st.name)}</h2>
+    <div class="s-stepclock"><span data-clock="step">${st.min}:00</span><small data-clock="steplbl">left in step</small></div>
+    ${st.items?`<ul class="s-items">${st.items.map(x=>`<li>${esc(x)}</li>`).join("")}</ul>`:""}
+    ${st.prompt?`<p class="s-prompt">${esc(st.prompt)}</p>`:""}${st.tip?`<p class="hint">${esc(st.tip)}</p>`:""}${st.note?`<p class="hint">${esc(st.note)}</p>`:""}
+    ${tally}${pass}
+    <div class="row">${i>0?`<button class="ghost" data-act="step" data-v="-1">‹ Back a step</button>`:""}${i<n-1?`<button class="play" data-act="step" data-v="1">Next: ${esc(r.steps[i+1].name)}</button>`:""}</div>
+    <ol class="s-steps">${list}</ol></section>`;
+}
+function routineResult(b){const r=ROUTINES[b.r];if(!r||!r.steps)return null;
+  return r.steps.filter(x=>x.tally).map(x=>{const k=r.steps.indexOf(x),tot=stepTotal(b,k,x),of=x.tally.reduce((a,y)=>a+y[1],0);
+    return {step:x.name,rows:x.tally.map(([l,o],j)=>[l,tallyOf(b,k,j),o]),total:tot,of,pass:x.pass!=null?tot>=x.pass:null}})}
 
 function paint(){
   if(!run)return;
@@ -146,6 +193,8 @@ function paint(){
   set("left",clock(tl));set("leftlbl",tl>=0?"Left in session":"Over planned time");
   document.querySelectorAll('[data-clock="block"]').forEach(n=>n.classList.toggle("over",bl<0));
   document.querySelectorAll('[data-clock="bar"]').forEach(n=>{n.style.width=Math.min(100,be/(b.min*60000)*100)+"%";n.classList.toggle("over",bl<0)});
+  const r=b.r&&ROUTINES[b.r];if(r&&r.steps){const st=r.steps[b.st||0],sl=st.min*60000-(el-(b.stAt||b.at));
+    set("step",clock(sl));set("steplbl",sl>=0?"left in step":"over");document.querySelectorAll('[data-clock="step"]').forEach(n=>n.classList.toggle("over",sl<0))}
   if(bl<=0&&!b.buzzed&&run.since){b.buzzed=true;saveRun();try{if(navigator.userActivation?.hasBeenActive)navigator.vibrate?.([200,100,200])}catch(e){}}
 }
 setInterval(paint,1000);
@@ -153,7 +202,8 @@ setInterval(paint,1000);
 function logRun(){
   const w=week(),log=Store.get("practiceLog",[]);
   run.blocks.forEach(b=>{if(b.used==null)return;const s=SESS[b.s];
-    log.push({run:run.id,date:run.date,s:b.s,title:s.title,disc:s.disc,min:Math.round(b.used/60000),done:!!b.done,games:b.games});
+    log.push({run:run.id,date:run.date,s:b.s,title:s.title+(b.r?" · "+rTitle(b.r):""),disc:s.disc,min:Math.round(b.used/60000),done:!!b.done,games:b.games,
+      ...(b.r?{routine:b.r,results:routineResult(b)}:{})});
     if(b.done)w.done[b.s]=Store.today()});
   Store.set("practiceLog",log);saveWeek(w);
   const id=run.id;run=null;Store.set("run",null);P.go("sum/"+id,true);
@@ -168,6 +218,7 @@ function sumView(id){
   return `<header><h1>Session done</h1><p class="sub">${esc(Store.fmtDate(rows[0].date,{weekday:"long",month:"short",day:"numeric"}))}</p></header>
   <section class="panel r-sum"><div class="label">Practiced</div><div class="r-big">${tot} min</div>
     <ol class="s-steps">${rows.map(x=>`<li class="${x.done?"done":"skip"}"><span>${esc(x.title)}</span><small>${x.done?"✓ ":"Not done · "}${x.min} min</small></li>`).join("")}</ol>
+    ${rows.filter(x=>x.results&&x.results.length).map(x=>`<div class="label">${esc(x.title)}</div><ul class="s-res">${x.results.map(rr=>`<li><div><b>${esc(rr.step)}</b><span class="${rr.pass===false?"bad":rr.pass?"good":""}">${rr.total}/${rr.of}${rr.pass==null?"":rr.pass?" ✓ passed":" ✗ not passed"}</span></div>${rr.rows.length>1?`<small>${rr.rows.map(([l,v,o])=>`${esc(l)} ${v}/${o}`).join(" · ")}</small>`:""}</li>`).join("")}</ul>`).join("")}
     ${rows.some(x=>x.games.length)?`<div class="label">Games</div><div class="r-list">${rows.flatMap(x=>x.games).map(P.gameRow).join("")}</div>`:""}
     <p class="hint">Done sessions are highlighted on this week's plan.</p></section>
   <div class="row"><a class="play" href="#practice">Done</a><a class="ghost" href="#notes" style="display:inline-flex;align-items:center">Update my notes</a></div>`;
@@ -187,6 +238,10 @@ const act={
     const b=blk(),mins=Math.round((elapsed()-b.at)/60000);
     const done=mins>=1&&confirm(`Count ${SESS[b.s].title} as done this week? (${mins} min practiced)`);
     run.blocks=run.blocks.slice(0,run.i+1);closeBlock(done)},
+  pickr(el){if(!run)return;const b=blk();b.r=el.dataset.r||null;b.st=0;b.stAt=elapsed();b.tally={};saveRun();P.render()},
+  step(el){if(!run)return;const b=blk(),r=ROUTINES[b.r];if(!r||!r.steps)return;b.st=Math.max(0,Math.min(r.steps.length-1,(b.st||0)+ +el.dataset.v));b.stAt=elapsed();saveRun();P.render();window.scrollTo(0,0)},
+  tal(el){if(!run)return;const b=blk(),r=ROUTINES[b.r],i=+el.dataset.i,j=+el.dataset.j,of=r.steps[i].tally[j][1];
+    b.tally=b.tally||{};const t=b.tally[i]=b.tally[i]||{};t[j]=Math.max(0,Math.min(of,(t[j]||0)+ +el.dataset.v));saveRun();P.render()},
   launch(el){let o={};try{o=JSON.parse(el.dataset.o||"{}")}catch(e){}P.launch(el.dataset.k,o)},
 };
 return {init,weekCard,sessView,runView,sumView,runBar,homeCard,running,addGame,act,paint};

@@ -408,3 +408,25 @@ a.play{display:inline-block;text-align:center}
 .c-dc{justify-self:start}
 .p-bench tr.hd{border-top:0}
 .p-bench tr.hd td{font:600 .68rem/1.2 var(--f-body);text-transform:uppercase;letter-spacing:.08em;color:var(--muted);padding-bottom:4px}
+
+/* routines inside a session */
+.s-outline{margin:0;padding-left:1.2em;display:grid;gap:4px;font-size:.92rem}
+.s-rhd{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+.s-stepname{font:700 2rem/1 var(--f-display);text-transform:uppercase;margin:0}
+.s-stepclock{display:flex;align-items:baseline;gap:10px}
+.s-stepclock span{font:700 2.4rem/1 var(--f-display);font-variant-numeric:tabular-nums}
+.s-stepclock small{font:600 .72rem/1 var(--f-body);text-transform:uppercase;letter-spacing:.09em;color:var(--muted)}
+.s-items{margin:0;padding-left:1.1em;display:grid;gap:6px;font-size:1.05rem}
+.s-prompt{margin:0;font-weight:600;font-size:1.05rem}
+.s-tally{display:grid;grid-template-columns:1fr 170px;align-items:center;gap:12px}
+.s-tally span{font:600 1rem var(--f-body)}
+.s-tally .stepper{grid-template-columns:48px 1fr 48px}
+.s-tally .stepper button{height:46px}
+.s-pass{margin:0;font-weight:600;color:var(--down)}
+.s-pass.ok{color:var(--back)}
+.s-res{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+.s-res li{border-top:1px solid var(--line);padding-top:8px;display:grid;gap:2px}
+.s-res li div{display:flex;justify-content:space-between;gap:10px;font:600 1rem var(--f-body)}
+.s-res li span{font:600 1rem var(--f-mono)}
+.s-res .good{color:var(--back)} .s-res .bad{color:var(--down)}
+.s-res small{color:var(--muted);font-size:.85rem}
