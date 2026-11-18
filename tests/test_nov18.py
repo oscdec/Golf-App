@@ -39,11 +39,13 @@ with sync_playwright() as p:
     pg.screenshot(path=f"{OUT}/n2-doneforday.png",full_page=True)
     pg.click("[data-act=cilater]");pg.wait_for_timeout(250)
     c=pg.content()
-    check("Session Done" in c and "Shortened" in c and "No check-out yet" in c,"More Practice Later: summary, shortened tag, no check-out yet")
+    check("Session done" in c and "Shortened" in c and "No check-out yet" in c,"More Practice Later: summary, shortened tag, no check-out yet")
     log=J(pg,"JSON.parse(localStorage.getItem('rg.practiceLog'))")
     check(log[0].get("short") is True and log[0]["routine"]=="putt","shortened routine saved")
+    check(pg.locator("#practiceRoot h1").text_content()=="Technical Putting" and pg.locator(".s-sblk").count()==1 and "Technical Putting" not in pg.locator(".s-sblk").text_content(),"summary names the session once")
     pg.click("a.play:has-text('Done')");pg.wait_for_timeout(200)
     check(pg.locator(".s-cocard").count()==1,"Practice home offers Check Out")
+    check("Coming Next" not in pg.content(),"no Coming Next card")
     check(pg.locator(".s-past").count()==1 and "Technical Putting" in pg.locator(".s-past").text_content(),"Past Sessions lists it")
 
     # ---- session 2 the same day: no check-in, clock starts right away ----

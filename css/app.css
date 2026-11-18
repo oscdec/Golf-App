@@ -556,3 +556,14 @@ button,.ghost,.r-opt,.p-btn,.r-back,.r-name,.s-name,.r-title,summary,h2,h3,.seg 
 .s-past .hint{font-size:.95rem}
 .n-none{margin:0}
 .n-dirty{color:var(--down);font-weight:600}
+
+/* session summary: one card per block (Nov 18) */
+.s-sblk{display:grid;gap:8px;background:var(--idle);border-radius:10px;padding:12px 14px;margin-top:10px}
+.s-sblk.done{background:var(--done-soft)}
+.s-sbhd{display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap}
+.s-sbhd b{font:700 1.15rem/1.2 var(--f-display);text-transform:uppercase;letter-spacing:.02em}
+.s-sbhd span{font:500 .9rem var(--f-body);color:var(--muted);white-space:nowrap}
+.s-shortnote{margin:0;display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:.88rem;color:var(--muted)}
+.s-shortnote .s-shortpill{vertical-align:0;padding:3px 8px;line-height:1.2}
+.s-sblk .s-res li:first-child{border-top:0;padding-top:0}
+.r-name .s-shortpill,.s-steps .s-shortpill{display:inline-block;margin:4px 0 0;line-height:1.2;padding:3px 8px;vertical-align:0}

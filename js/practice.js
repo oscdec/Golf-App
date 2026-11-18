@@ -239,9 +239,7 @@ function home(){
     <div class="row"><button class="play" data-act="resume">Resume</button><button class="ghost" data-act="quit">Discard Game</button></div></section>`:""}
   ${Sessions.weekCard()}
   ${Sessions.pastCard()}
-  <section class="r-list"><h2 class="p-h2">Games</h2>${cards}</section>
-  <section class="panel soon"><span class="pill">Coming Next</span><h2>More Practice Tools</h2>
-    <ul><li>Build your own plan for a day</li><li>Practice time by discipline over any date range</li></ul></section>`;
+  <section class="r-list"><h2 class="p-h2">Games</h2>${cards}</section>`;
 }
 
 /* ---------- game intro: rules, setup, average, history ---------- */

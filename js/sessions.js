@@ -502,16 +502,22 @@ function closeBlock(done){const b=blk();b.used=elapsed()-b.at;b.done=done;
   run.i++;blk().at=elapsed();saveRun();P.render();window.scrollTo(0,0);
 }
 function resultsHtml(x){
-  return `<div class="label">${esc(logTitle(x))}${x.short?` <em class="s-shortpill">Shortened</em>`:""}</div><ul class="s-res">${x.results.map(rr=>rr.seq?`<li><div><b>${esc(rr.step)}</b><span>Line ${rr.line}/${rr.n} · Window ${rr.win}/${rr.n}</span></div><small>${rr.rows.map(([sp,l,w,n])=>`${sp}: line ${l}/${n}, window ${w}/${n}`).join(" · ")}</small></li>`:rr.pick?`<li><div><b>${esc(rr.step)}</b><span>${rr.value==null?"—":rr.value+" "+esc(rr.unit)}</span></div><small>${esc(rr.pick)}</small></li>`:`<li><div><b>${esc(rr.step)}</b><span class="${rr.pass===false?"bad":rr.pass?"good":""}">${rr.total}/${rr.of}${rr.pass==null?"":rr.pass?" ✓ passed":" ✗ not passed"}</span></div>${rr.rows.length>1?`<small>${rr.rows.map(([l,v,o])=>`${esc(l)} ${v}/${o}`).join(" · ")}</small>`:""}</li>`).join("")}</ul>`;
+  return `<ul class="s-res">${x.results.map(rr=>rr.seq?`<li><div><b>${esc(rr.step)}</b><span>Line ${rr.line}/${rr.n} · Window ${rr.win}/${rr.n}</span></div><small>${rr.rows.map(([sp,l,w,n])=>`${sp}: line ${l}/${n}, window ${w}/${n}`).join(" · ")}</small></li>`:rr.pick?`<li><div><b>${esc(rr.step)}</b><span>${rr.value==null?"—":rr.value+" "+esc(rr.unit)}</span></div><small>${esc(rr.pick)}</small></li>`:`<li><div><b>${esc(rr.step)}</b><span class="${rr.pass===false?"bad":rr.pass?"good":""}">${rr.total}/${rr.of}${rr.pass==null?"":rr.pass?" ✓ passed":" ✗ not passed"}</span></div>${rr.rows.length>1?`<small>${rr.rows.map(([l,v,o])=>`${esc(l)} ${v}/${o}`).join(" · ")}</small>`:""}</li>`).join("")}</ul>`;
 }
+/* A finished session: the session's name once at the top, then one card per block with its time, its routine scores and
+   its games (the block's name only where it adds something: a routine, or a session with several blocks). */
 function sumView(id,fresh){
   const rows=Store.get("practiceLog",[]).filter(x=>x.run===id);if(!rows.length)return null;
-  const tot=rows.reduce((t,x)=>t+x.min,0);
-  return `${fresh?"":`<a class="r-back" href="#practice">‹ Practice</a>`}<header><h1>${fresh?"Session Done":"Session"}</h1><p class="sub">${esc(Store.fmtDate(rows[0].date,{weekday:"long",month:"short",day:"numeric"}))}${rows[0].edited?" · edited":""}</p></header>
+  const tot=rows.reduce((t,x)=>t+x.min,0),many=rows.length>1;
+  const name=rows.map(x=>SESS[x.s]?SESS[x.s].title:x.title).join(" + ");
+  const blocks=rows.map(x=>{const s=SESS[x.s],r=x.routine&&rTitle(x.routine),nm=r&&(!s||r!==s.title)?r:many?(s?s.title:x.title):"";
+    return `<div class="s-sblk${x.done?" done":""}"><div class="s-sbhd"><b>${esc(nm||"Time")}</b><span>${x.done?"✓ Done · ":"Not done · "}${x.min} min</span></div>
+      ${x.short?`<p class="s-shortnote"><em class="s-shortpill">Shortened</em> Left out of your routine stats in Insights.</p>`:""}
+      ${x.results&&x.results.length?resultsHtml(x):""}
+      ${x.games&&x.games.length?`<div class="r-list">${x.games.map(P.gameRow).join("")}</div>`:""}</div>`}).join("");
+  return `${fresh?"":`<a class="r-back" href="#practice">‹ Practice</a>`}<header><h1>${esc(name)}</h1><p class="sub">${fresh?"Session done · ":""}${esc(Store.fmtDate(rows[0].date,{weekday:"long",month:"short",day:"numeric"}))}${rows[0].edited?" · edited":""}</p></header>
   <section class="panel r-sum"><div class="label">Practiced</div><div class="r-big">${tot} min</div>
-    <ol class="s-steps">${rows.map(x=>`<li class="${x.done?"done":"skip"}"><span>${esc(logTitle(x))}${x.short?` <em class="s-shortpill">Shortened</em>`:""}</span><small>${x.done?"✓ ":"Not done · "}${x.min} min</small></li>`).join("")}</ol>
-    ${rows.filter(x=>x.results&&x.results.length).map(resultsHtml).join("")}
-    ${rows.some(x=>x.games.length)?`<div class="label">Games</div><div class="r-list">${rows.flatMap(x=>x.games).map(P.gameRow).join("")}</div>`:""}
+    ${blocks}
     ${ciSummary(rows[0].date)}
     ${fresh?`<p class="hint">Done sessions are highlighted on this week's plan.</p>`:""}</section>
   <div class="row">${fresh?`<a class="play" href="#practice">Done</a>`:""}<a class="ghost" href="#practice/edit/${esc(id)}" style="display:inline-flex;align-items:center">Edit Session</a>${fresh?"":`<button class="ghost danger" data-act="delrun" data-run="${esc(id)}">Delete Session</button>`}${fresh?`<a class="ghost" href="#notes" style="display:inline-flex;align-items:center">Update My Notes</a>`:""}</div>`;
