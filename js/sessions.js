@@ -121,18 +121,25 @@ function weekCard(){
   const differs=JSON.stringify(w.days)!==JSON.stringify(usual());
   const [y,m,d]=w.of.split("-").map(Number);
   const wk=plog().filter(x=>x.date>=w.of);
-  const extra=wk.filter(x=>x.free||(x.s&&SESS[x.s]&&SESS[x.s].optional));
+  const extra=wk.filter(x=>x.free||x.open||(x.s&&SESS[x.s]&&SESS[x.s].optional));
   return `<section class="s-week" aria-label="This week">
     <h2 class="p-h2">This Week</h2>
     <div class="s-weekhd"><div class="label">Suggested Plan · Week Of ${esc(new Date(y,m-1,d).toLocaleDateString(undefined,{month:"short",day:"numeric"}))}</div><span class="hint">${done} of ${total} done</span></div>
     ${rows}
     ${extra.length?`<div class="s-day s-extra"><div class="s-dayhd"><span class="s-dname">Extra Practice</span></div>${extra.map(x=>`<div class="s-xrow"><span>${esc(x.title)}<small>${esc(Store.fmtDate(x.date,{weekday:"short"}))}</small></span><b>${x.min} min</b></div>`).join("")}</div>`:""}
-    <p class="hint">Drag a session by its handle to move it to another day. Start any day, in any order; tap a session to start it alone or mark it done. Games played on their own show under Extra Practice and count toward your minutes.</p>
+    <p class="hint">Drag a session by its handle to move it to another day. Start any day, in any order; tap a session to start it alone or mark it done. Open Practice and games played on their own show under Extra Practice and count toward your minutes.</p>
     ${differs?`<div class="row"><button class="ghost sm" data-act="resetweek">Back To My Usual Week</button><button class="ghost sm" data-act="saveusual">Make This My Usual Week</button></div>`:""}
   </section>`;
 }
 
 const gamesOf=s=>(s.games||[]).map(g=>typeof g==="string"?{k:g,o:{}}:g);
+/* Open Practice (Nov 19): an unstructured block outside the week plan. I pick the discipline (so Insights files the
+   minutes correctly) and a timer: a countdown (with the alarm at the end) or a clock that counts up until I finish.
+   Blocks carry s:"open", disc, title, min (countdown minutes; 0 when counting up) and up:true when counting up. */
+const OPEN_DISC=[["Full swing","Full Swing",["driver","irons"]],["Wedges","Wedges",["wedges"]],["Chipping","Chipping",["chipping"]],["Putting","Putting",["putting"]]];
+const OPEN_MINS=[10,15,20,30,45,60,90];
+const sOf=b=>{if(b.s!=="open")return SESS[b.s];const d=OPEN_DISC.find(x=>x[0]===b.disc)||OPEN_DISC[0];
+  return {title:b.title||"Open Practice · "+d[1],min:b.min||0,disc:d[0],where:"Open Practice",open:true,up:!!b.up,notes:["general",...d[2]]}};
 function routineOutline(id){const r=ROUTINES[id];if(!r)return "";
   return r.steps?`<ol class="s-outline">${r.steps.map(st=>`<li><b>${esc(st.name)}</b> · ${st.min} min${st.items?": "+esc(st.items.join(", ")):st.prompt?": "+esc(st.prompt):""}</li>`).join("")}</ol>`:`<p class="hint">Steps to come.</p>`}
 function whatHtml(s){
@@ -162,7 +169,8 @@ const saveRun=()=>Store.set("run",run);
 const running=()=>!!run;
 const elapsed=()=>run?run.acc+(run.since?Date.now()-run.since:0):0;
 const blk=()=>run.blocks[run.i];
-const planned=()=>run.blocks.reduce((t,b)=>t+b.min,0)*60000;
+const planned=()=>run.blocks.reduce((t,b)=>t+(b.up?0:b.min),0)*60000;
+const openEnded=()=>run.blocks.some(b=>b.up);
 const clock=ms=>{const t=Math.floor(Math.abs(ms)/1000),h=Math.floor(t/3600),m=Math.floor(t%3600/60),s=t%60;
   return (h?h+":"+String(m).padStart(2,"0"):m)+":"+String(s).padStart(2,"0")};
 
@@ -175,14 +183,44 @@ function start(ids,label){
     blocks:ids.map(id=>({s:id,min:SESS[id].min,at:0,games:[],...(SESS[id].routines&&SESS[id].routines.length===1?{r:SESS[id].routines[0],st:0,stAt:0,tally:{}}:{})}))};
   saveRun();P.go("run");
 }
+function startOpen(o){
+  if(run){P.go("run");return}
+  const d=OPEN_DISC.find(x=>x[0]===o.disc);if(!d)return;
+  const asked=!!dayCI(Store.today()).start,up=o.mode==="up";
+  run={id:Store.uid(),label:"Open Practice",date:Store.today(),startedAt:Date.now(),acc:0,since:asked?Date.now():null,i:0,ci:{start:asked?"day":null,end:null},cd:{},
+    blocks:[{s:"open",disc:d[0],title:"Open Practice · "+d[1],min:up?0:o.min,up,at:0,games:[]}]};
+  saveRun();P.go("run");
+}
+/* The Open Practice setup: discipline, then count up or a countdown length. Remembers the last choices (rg.settings.open). */
+let openDraft=null;
+function openView(){
+  if(run)return null;
+  if(!openDraft){const o=Store.get("settings",{}).open||{};openDraft={disc:null,mode:o.mode||"up",min:o.min||30}}
+  const d=openDraft;
+  return `<a class="r-back" href="#practice">‹ Practice</a>
+  <header><h1>Open Practice</h1><p class="sub">No routine, no game: just you and a clock. Pick what you're working on so the minutes count in the right place in Insights.</p></header>
+  <section class="panel r-form">
+    <div class="r-field"><div class="label">Discipline</div><div class="r-opts s-odisc">${OPEN_DISC.map(([k,l])=>`<button class="r-opt" data-act="odisc" data-v="${k}" aria-pressed="${d.disc===k}">${l}</button>`).join("")}</div></div>
+    <div class="r-field"><div class="label">Timer</div><div class="r-opts s-odisc">${[["up","Count Up"],["down","Countdown"]].map(([k,l])=>`<button class="r-opt" data-act="omode" data-v="${k}" aria-pressed="${d.mode===k}">${l}</button>`).join("")}</div>
+      <p class="hint">${d.mode==="up"?"The clock counts up from zero. Tap Finish Session when you're done.":"The clock counts down, and the alarm sounds when it reaches zero (it works with the screen locked)."}</p></div>
+    ${d.mode==="down"?`<div class="r-field"><div class="label">Countdown Length</div><div class="r-opts s-omins">${OPEN_MINS.map(m=>`<button class="r-opt" data-act="omin" data-v="${m}" aria-pressed="${d.min===m}">${m} min</button>`).join("")}</div>
+      <div class="stepper p-step"><button data-act="omin" data-d="-5" aria-label="5 minutes less">−</button><output>${d.min} min</output><button data-act="omin" data-d="5" aria-label="5 minutes more">+</button></div></div>`:""}
+  </section>
+  <button class="play r-wide" data-act="ostart"${d.disc?"":" disabled"}>${d.disc?"Start Open Practice":"Pick A Discipline To Start"}</button>`;
+}
+function openCard(){
+  if(run)return "";
+  return `<section class="panel s-opencard"><div class="r-title">Open Practice<small>No routine or game: pick a discipline and a timer (count up, or a countdown with the alarm). Counts as Extra Practice.</small></div>
+    <div class="row"><a class="ghost" href="#practice/open" style="display:inline-flex;align-items:center">Start Open Practice</a></div></section>`;
+}
 function addGame(gameId){if(!run)return;const b=blk();if(!b.games.includes(gameId)){b.games.push(gameId);saveRun()}}
 
 function runBar(){
-  if(!run)return "";const s=SESS[blk().s];
+  if(!run)return "";const s=sOf(blk());
   return `<a class="s-runbar" href="#practice/run"><span class="s-dot${run.since?"":" paused"}"></span><span class="s-rname">${esc(s.title)}</span><b data-clock="block"></b><small data-clock="blocklbl">left</small></a>`;
 }
 function homeCard(){
-  if(!run)return "";const s=SESS[blk().s];
+  if(!run)return "";const s=sOf(blk());
   return `<section class="panel r-active"><span class="pill live">${inCheck()?(run.ending?"Finish Check-In":"Check-In Waiting"):run.since?"Session Running":"Session Paused"}</span>
     <div class="r-title">${esc(run.label)}<small>${esc(s.title)} · <span data-clock="block"></span> <span data-clock="blocklbl">left</span> · practiced <span data-clock="elapsed"></span></small></div>
     <div class="row"><a class="play" href="#practice/run">Open Session</a></div></section>`;
@@ -248,18 +286,23 @@ function saveCheckins(){
 function runView(){
   if(!run)return null;
   if(inCheck())return checkinView();
-  const b=blk(),s=SESS[b.s],last=run.i===run.blocks.length-1,paused=!run.since;
+  const b=blk(),s=sOf(b),last=run.i===run.blocks.length-1,paused=!run.since;
   const stepNow=b.r&&ROUTINES[b.r]&&ROUTINES[b.r].steps?ROUTINES[b.r].steps[b.st||0]:null;
   const games=gamesOf(s).map(g=>`<button class="r-row p-game" data-act="launch" data-k="${g.k}" data-o="${esc(JSON.stringify(g.o||{}))}"><span class="r-name">${esc(P.gameName(g.k,g.o))}<small>${esc(P.gameSub(g.k))}</small></span><span class="p-go">›</span></button>`).join("");
   const played=b.games.map(P.gameRow).join("");
   const notes=(s.notes||[]).map(a=>{const t=typeof Notes!=="undefined"?Notes.get(a):"";
     return `<div class="s-note"><div class="label">${esc(typeof Notes!=="undefined"?Notes.name(a):a)}</div>${t?`<p>${esc(t)}</p>`:`<p class="hint">Nothing written yet.</p>`}</div>`}).join("");
-  const steps=run.blocks.map((x,i)=>{const t=SESS[x.s],st=i<run.i?(x.done?"done":"skip"):i===run.i?"cur":"";
+  const steps=run.blocks.map((x,i)=>{const t=sOf(x),st=i<run.i?(x.done?"done":"skip"):i===run.i?"cur":"";
     return `<li class="${st}"><span>${esc(t.title)}</span><small>${i<run.i?(x.done?"✓ "+Math.round(x.used/60000)+" min":"Skipped"):x.min+" min"}</small></li>`}).join("");
   return `<a class="r-back" href="#practice">‹ Practice</a>
-  <header><h1>${esc(run.label)}</h1><p class="sub">${run.blocks.length>1?`Block ${run.i+1} of ${run.blocks.length} · `:""}${esc(s.disc.replace(/\b\w/g,c=>c.toUpperCase()))} · ${esc(s.where)}</p></header>
+  <header><h1>${esc(run.label)}</h1><p class="sub">${run.blocks.length>1?`Block ${run.i+1} of ${run.blocks.length} · `:""}${esc(s.disc.replace(/\b\w/g,c=>c.toUpperCase()))}${s.open?"":" · "+esc(s.where)}</p></header>
   <section class="panel s-clock">
-    ${stepNow?`<div class="s-big"><div class="label">${esc(stepNow.name)} · <span data-clock="steplbl">left</span></div><div class="clock" data-clock="step">0:00</div><div class="p-bar"><i data-clock="stepbar"></i></div></div>`
+    ${b.up?`<div class="s-big"><div class="label">${esc(s.title)} · <span data-clock="blocklbl">counting up</span></div><div class="clock" data-clock="block">0:00</div></div>
+    <div class="s-tot"><div><div class="label">Practiced</div><div class="v" data-clock="elapsed">0:00</div></div>
+      <div><div class="label">Timer</div><div class="v">Count Up</div></div><div><div class="label">Started</div><div class="v">${esc(new Date(run.startedAt).toLocaleTimeString([],{hour:"numeric",minute:"2-digit"}))}</div></div></div>
+    ${paused?`<p class="s-paused">Paused. The clock is stopped.</p>`:""}
+    <p class="hint s-upnote">No alarm: the clock counts up until you tap Finish Session.</p>
+  </section>`:`${stepNow?`<div class="s-big"><div class="label">${esc(stepNow.name)} · <span data-clock="steplbl">left</span></div><div class="clock" data-clock="step">0:00</div><div class="p-bar"><i data-clock="stepbar"></i></div></div>`
       :`<div class="s-big"><div class="label">${esc(s.title)} · <span data-clock="blocklbl">left</span></div><div class="clock" data-clock="block">0:00</div><div class="p-bar"><i data-clock="bar"></i></div></div>`}
     <div class="s-tot${stepNow?" four":""}">${stepNow?`<div><div class="label" data-clock="blockhd">Block Left</div><div class="v" data-clock="block">0:00</div></div>`:""}
       <div><div class="label">Practiced</div><div class="v" data-clock="elapsed">0:00</div></div>
@@ -268,13 +311,14 @@ function runView(){
     ${paused?`<p class="s-paused">Paused. The clocks are stopped.</p>`:""}
     <div class="s-alrow"><span class="hint">Alarm at the end of each section · rises to your media volume · works with the screen locked</span>
       <button class="ghost sm" data-act="altest">Test</button><button class="ghost sm" data-act="altoggle" aria-pressed="${alarmOn()}">${alarmOn()?"Alarm On":"Alarm Off"}</button></div>
-  </section>
+  </section>`}
   <div class="row s-ctl"><button class="play" data-act="next">${last?"Finish Session":"Finish Block"}</button>
     <button class="ghost" data-act="pause">${paused?"Resume":"Pause"}</button>
     ${last?"":`<button class="ghost" data-act="skip">Skip Block</button>`}
     <button class="ghost" data-act="endrun">End Now</button>
     <button class="ghost danger" data-act="discardrun">Discard</button></div>
-  ${s.free?`<section class="panel s-what"><p class="hint">Freestyle: no structure. Work on whatever feels needed; the clock keeps your time.</p></section>`:s.routines?routinePanel(s,b):`<section class="panel s-what">${s.routine?whatHtml(s):`<div class="label">${gamesOf(s).length>1?"Pick A Game":"Game"}</div><div class="r-list">${games}</div>`}
+  ${s.open?`<section class="panel s-what"><p class="hint">Open practice: no routine, no game. Work on whatever you like; the clock keeps your time, and the minutes count toward ${esc(s.disc.toLowerCase())} in Insights.</p></section>`
+    :s.free?`<section class="panel s-what"><p class="hint">Freestyle: no structure. Work on whatever feels needed; the clock keeps your time.</p></section>`:s.routines?routinePanel(s,b):`<section class="panel s-what">${s.routine?whatHtml(s):`<div class="label">${gamesOf(s).length>1?"Pick A Game":"Game"}</div><div class="r-list">${games}</div>`}
     ${played?`<div class="label">Played This Block</div><div class="r-list">${played}</div>`:""}</section>`}
   ${notes?`<section class="panel s-notes"><div class="s-noteshd"><div class="label">Your Notes</div><a class="ghost sm" href="#notes">Edit In Notes</a></div>${notes}</section>`:""}
   ${run.blocks.length>1?`<section class="panel"><div class="label">Today's Blocks</div><ol class="s-steps">${steps}</ol></section>`:""}`;
@@ -407,9 +451,10 @@ function section(){
   const b=blk(),r=b.r&&ROUTINES[b.r],last=run.i===run.blocks.length-1,el=elapsed();
   if(r&&r.steps){const i=b.st||0,st=r.steps[i],start=i===0&&b.stAt==null?b.at:(b.stAt||b.at),left=st.min*60000-(el-start);
     return {key:run.i+":"+i,name:st.name,left,len:st.min*60000,next:i<r.steps.length-1?{act:"step",label:"Next: "+r.steps[i+1].name}:{act:"next",label:last?"Finish Session":"Finish Block"}}}
-  return {key:run.i+":b",name:SESS[b.s].title,left:b.min*60000-(el-b.at),len:b.min*60000,next:{act:"next",label:last?"Finish Session":"Finish Block"}};
+  if(b.up)return {key:run.i+":up",name:sOf(b).title,up:true,left:1e12,len:1e12,next:{act:"next",label:last?"Finish Session":"Finish Block"}};
+  return {key:run.i+":b",name:sOf(b).title,left:b.min*60000-(el-b.at),len:b.min*60000,next:{act:"next",label:last?"Finish Session":"Finish Block"}};
 }
-const alarmMuted=sec=>!alarmOn()||!!(run.alarmOff||{})[sec.key];
+const alarmMuted=sec=>!!sec.up||!alarmOn()||!!(run.alarmOff||{})[sec.key];
 const isRinging=sec=>!!(run&&run.since&&!inCheck()&&!alarmMuted(sec)&&sec.left<=0&&sec.left>-CHIME_SECS*1000);
 function syncAlarm(){
   if(!run||!run.since||inCheck()){
@@ -448,15 +493,16 @@ function updateLock(sec){
     h("pause",()=>{if(!run)return;const s=section();if(isRinging(s))stopSound();else if(run.since)act.pause()});
     ["stop","seekbackward","seekforward","seekto","previoustrack","nexttrack"].forEach(a=>h(a,null))}
   sec=sec||section();
-  const b=blk(),s=SESS[b.s],el=elapsed(),bl=b.min*60000-(el-b.at),tl=planned()-el,steps=b.r&&ROUTINES[b.r]&&ROUTINES[b.r].steps;
+  const b=blk(),s=sOf(b),el=elapsed(),bl=b.min*60000-(el-b.at),tl=planned()-el,steps=b.r&&ROUTINES[b.r]&&ROUTINES[b.r].steps;
   const lt=t=>clock(t)+(t>=0?" left":" over");
-  let title=steps?`${sec.name} · ${lt(sec.left)}`:`${s.title} · ${lt(bl)}`;
+  let title=b.up?`${s.title} · ${clock(el-b.at)}`:steps?`${sec.name} · ${lt(sec.left)}`:`${s.title} · ${lt(bl)}`;
   if(isRinging(sec))title=`Time's Up · ${sec.name}`;else if(!run.since)title="Paused · "+title;
-  const artist=steps?`${s.title} ${lt(bl)} · Practiced ${clock(el)}`:`Practiced ${clock(el)} · Session ${lt(tl)}`;
+  const artist=b.up?`Counting up · Practiced ${clock(el)}`:steps?`${s.title} ${lt(bl)} · Practiced ${clock(el)}`:openEnded()?`Practiced ${clock(el)}`:`Practiced ${clock(el)} · Session ${lt(tl)}`;
   const key=title+"|"+artist;
   if(key!==msKey){msKey=key;
     try{ms.metadata=new MediaMetadata({title,artist,album:run.label,artwork:[{src:"icons/icon-512.png",sizes:"512x512",type:"image/png"}]})}catch(e){}}
   try{ms.playbackState=run.since?"playing":"paused";
+    if(sec.up){try{ms.setPositionState?.()}catch(e){}return}
     const len=sec.len/1000,pos=len-sec.left/1000;
     ms.setPositionState?.({duration:Math.max(len,pos,1),position:Math.max(0,Math.min(Math.max(len,pos,1),pos)),playbackRate:1})}catch(e){}
 }
@@ -474,13 +520,14 @@ function showAlarm(sec){
 
 function paint(){
   if(!run){if(alarmSig){Alarm.cancel();alarmSig=""}Lock.stop();showAlarm(null);return}
-  const b=blk(),el=elapsed(),be=el-b.at,bl=b.min*60000-be,tl=planned()-el;
+  const b=blk(),el=elapsed(),be=el-b.at,bl=b.up?1:b.min*60000-be,tl=planned()-el;
   const set=(k,v)=>document.querySelectorAll(`[data-clock="${k}"]`).forEach(n=>{if(n.textContent!==v)n.textContent=v});
   document.querySelectorAll('[data-clock="weektotal"]').forEach(n=>{const v=hm(+n.dataset.base+el);if(n.textContent!==v)n.textContent=v});
-  set("elapsed",clock(el));set("block",clock(bl));set("blocklbl",bl>=0?"left":"over");set("blockhd",bl>=0?"Block Left":"Block Over");
-  set("left",clock(tl));set("leftlbl",tl>=0?"Left In Session":"Over Planned Time");
+  set("elapsed",clock(el));
+  if(b.up){set("block",clock(be));set("blocklbl","counting up")}else{set("block",clock(bl));set("blocklbl",bl>=0?"left":"over");set("blockhd",bl>=0?"Block Left":"Block Over")}
+  if(openEnded()){set("left","—");set("leftlbl","Left In Session")}else{set("left",clock(tl));set("leftlbl",tl>=0?"Left In Session":"Over Planned Time")}
   document.querySelectorAll('[data-clock="block"]').forEach(n=>n.classList.toggle("over",bl<0));
-  document.querySelectorAll('[data-clock="bar"]').forEach(n=>{n.style.width=Math.min(100,be/(b.min*60000)*100)+"%";n.classList.toggle("over",bl<0)});
+  document.querySelectorAll('[data-clock="bar"]').forEach(n=>{n.style.width=b.up?"0%":Math.min(100,be/(b.min*60000)*100)+"%";n.classList.toggle("over",bl<0)});
   const r=b.r&&ROUTINES[b.r];if(r&&r.steps){const sec=section(),sl=sec.left;
     set("step",clock(sl));set("steplbl",sl>=0?"left":"over");document.querySelectorAll('[data-clock="step"]').forEach(n=>n.classList.toggle("over",sl<0));
     document.querySelectorAll('[data-clock="stepbar"]').forEach(n=>{n.style.width=Math.max(0,Math.min(100,(1-sl/sec.len)*100))+"%";n.classList.toggle("over",sl<0)})}
@@ -491,10 +538,10 @@ setInterval(paint,1000);
 
 function logRun(){
   const w=week(),log=Store.get("practiceLog",[]);
-  run.blocks.forEach(b=>{if(b.used==null)return;const s=SESS[b.s];
-    log.push({run:run.id,date:run.date,s:b.s,title:s.title+(b.r&&rTitle(b.r)!==s.title?" · "+rTitle(b.r):""),disc:s.disc,min:Math.round(b.used/60000),done:!!b.done,games:b.games,
+  run.blocks.forEach(b=>{if(b.used==null)return;const s=sOf(b);
+    log.push({run:run.id,date:run.date,s:b.s,...(s.open?{open:true,up:!!b.up}:{}),title:s.title+(b.r&&rTitle(b.r)!==s.title?" · "+rTitle(b.r):""),disc:s.disc,min:Math.round(b.used/60000),done:!!b.done,games:b.games,
       ...(b.r?{routine:b.r,results:routineResult(b),...(b.short?{short:true}:{})}:{})});
-    if(b.done)w.done[b.s]=Store.today()});
+    if(b.done&&SESS[b.s])w.done[b.s]=Store.today()});
   Store.set("practiceLog",log);saveWeek(w);saveCheckins();
   const id=run.id;run=null;Store.set("run",null);P.go("sum/"+id+"/new",true);
 }
@@ -567,7 +614,7 @@ function editView(id){
     const games=(x.games||[]).map(gid=>P.gameRow(gid).replace('class="r-row p-game" href="#practice/res/','class="r-row p-game" href="#practice/ge/')).join("");
     return `<section class="panel s-edblk"><h2>${esc(logTitle(x))}</h2>
       <div class="r-two"><label class="r-field"><span class="label">Minutes</span><input class="r-input" type="number" inputmode="numeric" min="0" max="300" data-edmin="${i}" value="${x.min}"></label>
-        <div class="r-field"><span class="label">This Week's Plan</span><button class="r-opt" data-act="eddone" data-i="${i}" aria-pressed="${!!x.done}">${x.done?"✓ Counted As Done":"Not Done"}</button></div></div>
+        ${SESS[x.s]?`<div class="r-field"><span class="label">This Week's Plan</span><button class="r-opt" data-act="eddone" data-i="${i}" aria-pressed="${!!x.done}">${x.done?"✓ Counted As Done":"Not Done"}</button></div>`:x.open?`<div class="r-field"><span class="label">Discipline</span><div class="r-opts">${OPEN_DISC.map(([k,l])=>`<button class="r-opt" data-act="eddisc" data-i="${i}" data-v="${k}" aria-pressed="${x.disc===k}">${l}</button>`).join("")}</div></div>`:""}</div>
       ${x.routine?`<div class="r-field"><span class="label">Routine</span><button class="r-opt" data-act="edshort" data-i="${i}" aria-pressed="${!!x.short}">${x.short?"✓ Shortened":"Mark As Shortened"}</button><p class="hint">Shortened routines stay out of your routine stats in Insights.</p></div>`:""}
       ${res}
       ${games?`<div class="label">Games In This Block</div><div class="r-list">${games}</div><p class="hint">Tap a game to edit its shots.</p>`:""}</section>`}).join("");
@@ -596,10 +643,10 @@ const act={
   saveusual(){if(!confirm("Use this week's layout as your usual week from now on?"))return;Store.set("plan",{days:clone(week().days)});P.render()},
   pause(){if(!run)return;if(run.since){run.acc=elapsed();run.since=null}else run.since=Date.now();saveRun();P.render()},
   next(){if(run)closeBlock(true)},
-  skip(){if(run&&confirm(`Skip ${SESS[blk().s].title}? It stays open on this week's plan.`))closeBlock(false)},
+  skip(){if(run&&confirm(`Skip ${sOf(blk()).title}? It stays open on this week's plan.`))closeBlock(false)},
   endrun(){if(!run||!confirm("End the session now?"))return;
     const b=blk(),mins=Math.round((elapsed()-b.at)/60000);
-    const done=mins>=1&&confirm(`Count ${SESS[b.s].title} as done this week? (${mins} min practiced)`);
+    const done=sOf(b).open?true:mins>=1&&confirm(`Count ${SESS[b.s].title} as done this week? (${mins} min practiced)`);
     run.blocks=run.blocks.slice(0,run.i+1);closeBlock(done)},
   discardrun(){if(!run)return;
     if(!confirm("Discard this session? None of its time counts toward your practice, and nothing is marked done. Games you finished in it stay in their own history."))return;
@@ -617,6 +664,10 @@ const act={
   co(el){const q=el.dataset.q;coDraft[q]=q==="hq"?+el.dataset.v:el.dataset.v;P.render()},
   cosave(){if(!ciReady(coDraft))return;const d=Store.today(),c=Store.get("checkins",[]),last=plog().filter(x=>x.date===d&&x.run).pop();
     c.push({run:last?last.run:null,date:d,when:"end",fun:coDraft.fun,life:coDraft.life,hq:coDraft.hq,at:Date.now()});Store.set("checkins",c);coDraft={};P.go("",true)},
+  odisc(el){if(!openDraft)return;openDraft.disc=el.dataset.v;P.render()},
+  omode(el){if(!openDraft)return;openDraft.mode=el.dataset.v;P.render()},
+  omin(el){if(!openDraft)return;openDraft.min=el.dataset.d?Math.max(5,Math.min(180,openDraft.min+ +el.dataset.d)):+el.dataset.v;P.render()},
+  ostart(){const d=openDraft;if(!d||!d.disc)return;const st=Store.get("settings",{});st.open={mode:d.mode,min:d.min};Store.set("settings",st);openDraft=null;startOpen(d)},
   rshort(){if(!run)return;const b=blk();b.short=!b.short;saveRun();P.render()},
   /* editing a finished session */
   edtal(el){if(!ed)return;syncEdMin();const x=ed.rows[+el.dataset.i],rr=x.results[+el.dataset.r],row=rr.rows[+el.dataset.j];
@@ -626,6 +677,7 @@ const act={
     const ix={l:1,w:2,n:3}[f];row[ix]=Math.max(0,row[ix]+ +el.dataset.v);row[3]=Math.min(per,row[3]);row[1]=Math.min(row[1],row[3]);row[2]=Math.min(row[2],row[3]);
     edRecalc(x);P.render()},
   edpick(el){if(!ed)return;syncEdMin();const rr=ed.rows[+el.dataset.i].results[+el.dataset.r],v=+el.dataset.v;rr.value=rr.value===v?null:v;P.render()},
+  eddisc(el){if(!ed)return;syncEdMin();const x=ed.rows[+el.dataset.i],d=OPEN_DISC.find(y=>y[0]===el.dataset.v);x.disc=d[0];x.title="Open Practice · "+d[1];P.render()},
   eddone(el){if(!ed)return;syncEdMin();const x=ed.rows[+el.dataset.i];x.done=!x.done;P.render()},
   edshort(el){if(!ed)return;syncEdMin();const x=ed.rows[+el.dataset.i];if(x.short)delete x.short;else x.short=true;P.render()},
   edci(el){if(!ed)return;syncEdMin();const c=ed.ci[el.dataset.w],q=el.dataset.q,v=q==="hq"?+el.dataset.v:el.dataset.v;c[q]=c[q]===v?null:v;P.render()},
@@ -697,5 +749,5 @@ const act={
 })();
 
 return {routineTitle:k=>ROUTINES[k]?ROUTINES[k].title:k,init,weekTotal,logFree,countGame,matchSession,title:id=>SESS[id]?SESS[id].title:id,weekCard,sessView,runView,sumView,runBar,homeCard,
-  checkoutCard,checkoutView,pastCard,editView,running,addGame,act,paint};
+  checkoutCard,checkoutView,pastCard,editView,openView,openCard,resetOpen:()=>{openDraft=null},running,addGame,act,paint};
 })();

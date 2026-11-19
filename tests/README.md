@@ -3,7 +3,7 @@
 Playwright scripts that drive the app in headless Chromium against a local server.
 
 1. From the repo root: `python3 -m http.server 8765` (keep it running).
-2. Run each script: `python3 tests/test_app.py` (and test_routine, test_round3, test_round4, test_alarm, test_insights, test_nov18).
+2. Run each script: `python3 tests/test_app.py` (and test_routine, test_round3, test_round4, test_alarm, test_insights, test_nov18, test_open).
    In Claude's cloud sandbox set `PLAYWRIGHT_BROWSERS_PATH=/opt/pw-browsers` first.
 
 Each prints PASS/FAIL lines and "no script errors". Font load failures (ERR_TUNNEL_CONNECTION_FAILED) are the sandbox blocking Google Fonts and can be ignored.

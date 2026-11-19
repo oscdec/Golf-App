@@ -203,7 +203,7 @@ let opts={},pendingTee=null,dcNext=false,side="";
 
 function render(){
   const p=route();if(!p)return;const [a,b]=p;let html;
-  if(a!=="ge")gd=null;if(a!=="edit")Sessions.act.edcancel();
+  if(a!=="ge")gd=null;if(a!=="edit")Sessions.act.edcancel();if(a!=="open")Sessions.resetOpen();
   switch(a){
     case undefined:case "":html=home();break;
     case "g":if(!G[b]){go("",true);return}html=intro(b);break;
@@ -214,6 +214,7 @@ function render(){
     case "sum":html=Sessions.sumView(b,p[2]==="new");if(!html){go("",true);return}break;
     case "edit":html=Sessions.editView(b);if(!html){go("",true);return}break;
     case "checkout":html=Sessions.checkoutView();if(!html){go("",true);return}break;
+    case "open":html=Sessions.openView();if(!html){go(Sessions.running()?"run":"",true);return}break;
     case "ge":{const g=games.find(x=>x.id===b&&x.status!=="active");if(!g){go("",true);return}html=editGame(g);break}
     default:go("",true);return;
   }
@@ -238,6 +239,7 @@ function home(){
   ${g?`<section class="panel r-active"><span class="pill live">In Progress</span><div class="r-title">${esc(G[g.game].name)}<small>${esc(G[g.game].label(g.setup))}</small></div>
     <div class="row"><button class="play" data-act="resume">Resume</button><button class="ghost" data-act="quit">Discard Game</button></div></section>`:""}
   ${Sessions.weekCard()}
+  ${Sessions.openCard()}
   ${Sessions.pastCard()}
   <section class="r-list"><h2 class="p-h2">Games</h2>${cards}</section>`;
 }

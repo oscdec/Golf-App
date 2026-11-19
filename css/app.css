@@ -567,3 +567,9 @@ button,.ghost,.r-opt,.p-btn,.r-back,.r-name,.s-name,.r-title,summary,h2,h3,.seg 
 .s-shortnote .s-shortpill{vertical-align:0;padding:3px 8px;line-height:1.2}
 .s-sblk .s-res li:first-child{border-top:0;padding-top:0}
 .r-name .s-shortpill,.s-steps .s-shortpill{display:inline-block;margin:4px 0 0;line-height:1.2;padding:3px 8px;vertical-align:0}
+
+/* Open Practice (Nov 19) */
+.s-opencard{display:grid;gap:10px;border-style:dashed}
+.s-odisc .r-opt{flex:1 1 40%;text-align:center}
+.s-omins .r-opt{text-align:center;min-width:5em}
+.s-upnote{margin:0}
