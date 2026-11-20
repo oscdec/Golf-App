@@ -194,23 +194,30 @@ function startOpen(o){
 /* The Open Practice setup: discipline, then count up or a countdown length. Remembers the last choices (rg.settings.open). */
 let openDraft=null;
 function openView(){
-  if(run)return null;
-  if(!openDraft){const o=Store.get("settings",{}).open||{};openDraft={disc:null,mode:o.mode||"up",min:o.min||30}}
-  const d=openDraft;
+  if(!openDraft){const o=Store.get("settings",{}).open||{};openDraft={disc:null,mode:o.mode||"up",min:o.min||30,date:Store.today()}}
+  const d=openDraft;if(run)d.mode="log";   /* while a session runs, only past practice can be entered */
+  const log=d.mode==="log",today=Store.today();
+  const modes=run?[["log","Already Practiced"]]:[["up","Count Up"],["down","Countdown"],["log","Already Practiced"]];
+  const hint=log?"Forgot to start the clock? Enter how long you practiced and the day. It's saved straight away: no timer and no check-in.":d.mode==="up"?"The clock counts up from zero. Tap Finish Session when you're done.":"The clock counts down, and the alarm sounds when it reaches zero (it works with the screen locked).";
   return `<a class="r-back" href="#practice">‹ Practice</a>
-  <header><h1>Open Practice</h1><p class="sub">No routine, no game: just you and a clock. Pick what you're working on so the minutes count in the right place in Insights.</p></header>
+  <header><h1>Open Practice</h1><p class="sub">No routine, no game: just you and a clock, or time you've already practiced. Pick what you're working on so the minutes count in the right place in Insights.</p></header>
   <section class="panel r-form">
     <div class="r-field"><div class="label">Discipline</div><div class="r-opts s-odisc">${OPEN_DISC.map(([k,l])=>`<button class="r-opt" data-act="odisc" data-v="${k}" aria-pressed="${d.disc===k}">${l}</button>`).join("")}</div></div>
-    <div class="r-field"><div class="label">Timer</div><div class="r-opts s-odisc">${[["up","Count Up"],["down","Countdown"]].map(([k,l])=>`<button class="r-opt" data-act="omode" data-v="${k}" aria-pressed="${d.mode===k}">${l}</button>`).join("")}</div>
-      <p class="hint">${d.mode==="up"?"The clock counts up from zero. Tap Finish Session when you're done.":"The clock counts down, and the alarm sounds when it reaches zero (it works with the screen locked)."}</p></div>
-    ${d.mode==="down"?`<div class="r-field"><div class="label">Countdown Length</div><div class="r-opts s-omins">${OPEN_MINS.map(m=>`<button class="r-opt" data-act="omin" data-v="${m}" aria-pressed="${d.min===m}">${m} min</button>`).join("")}</div>
-      <div class="stepper p-step"><button data-act="omin" data-d="-5" aria-label="5 minutes less">−</button><output>${d.min} min</output><button data-act="omin" data-d="5" aria-label="5 minutes more">+</button></div></div>`:""}
+    <div class="r-field"><div class="label">Timer</div><div class="r-opts s-odisc s-omode">${modes.map(([k,l])=>`<button class="r-opt" data-act="omode" data-v="${k}" aria-pressed="${d.mode===k}">${l}</button>`).join("")}</div>
+      <p class="hint">${run?"A session is running, so you can only enter practice you've already done. ":""}${hint}</p></div>
+    ${d.mode!=="up"?`<div class="r-field"><div class="label">${log?"How Long You Practiced":"Countdown Length"}</div><div class="r-opts s-omins">${OPEN_MINS.map(m=>`<button class="r-opt" data-act="omin" data-v="${m}" aria-pressed="${d.min===m}">${m} min</button>`).join("")}</div>
+      <div class="stepper p-step s-ominstep"><button data-act="omin" data-d="-5" aria-label="5 minutes less">−</button><label><input id="oMin" type="number" inputmode="numeric" min="${log?1:5}" max="${log?300:180}" value="${d.min}" aria-label="Minutes"> min</label><button data-act="omin" data-d="5" aria-label="5 minutes more">+</button></div>
+      <p class="hint">Tap a length, type the minutes, or use − and + (5 minutes a tap).</p></div>`:""}
+    ${log?`<div class="r-field"><label class="label" for="oDate">Day You Practiced</label><input class="r-input" type="date" id="oDate" max="${today}" value="${esc(d.date)}"></div>`:""}
   </section>
-  <button class="play r-wide" data-act="ostart"${d.disc?"":" disabled"}>${d.disc?"Start Open Practice":"Pick A Discipline To Start"}</button>`;
+  <button class="play r-wide" data-act="${log?"osave":"ostart"}"${d.disc?"":" disabled"}>${!d.disc?(log?"Pick A Discipline To Save":"Pick A Discipline To Start"):log?"Save Practice":"Start Open Practice"}</button>`;
 }
+/* Keep what was typed in the minutes and date boxes when the screen redraws. */
+function syncOpen(){if(!openDraft)return;const m=document.getElementById("oMin"),dt=document.getElementById("oDate");
+  if(m){const v=parseInt(m.value,10);if(v>0)openDraft.min=v}if(dt&&dt.value)openDraft.date=dt.value}
 function openCard(){
   if(run)return "";
-  return `<section class="panel s-opencard"><div class="r-title">Open Practice<small>No routine or game: pick a discipline and a timer (count up, or a countdown with the alarm). Counts as Extra Practice.</small></div>
+  return `<section class="panel s-opencard"><div class="r-title">Open Practice<small>No routine or game: pick a discipline and a timer (count up, or a countdown with the alarm), or enter time you already practiced. Counts as Extra Practice.</small></div>
     <div class="row"><a class="ghost" href="#practice/open" style="display:inline-flex;align-items:center">Start Open Practice</a></div></section>`;
 }
 function addGame(gameId){if(!run)return;const b=blk();if(!b.games.includes(gameId)){b.games.push(gameId);saveRun()}}
@@ -565,7 +572,7 @@ function sumView(id,fresh){
       ${x.short?`<p class="s-shortnote"><em class="s-shortpill">Shortened</em> Left out of your routine stats in Insights.</p>`:""}
       ${x.results&&x.results.length?resultsHtml(x):""}
       ${x.games&&x.games.length?`<div class="r-list">${x.games.map(P.gameRow).join("")}</div>`:""}</div>`}).join("");
-  return `${fresh?"":`<a class="r-back" href="#practice">‹ Practice</a>`}<header><h1>${esc(name)}</h1><p class="sub">${fresh?"Session done · ":""}${esc(Store.fmtDate(rows[0].date,{weekday:"long",month:"short",day:"numeric"}))}${rows[0].edited?" · edited":""}</p></header>
+  return `${fresh?"":`<a class="r-back" href="#practice">‹ Practice</a>`}<header><h1>${esc(name)}</h1><p class="sub">${fresh?"Session done · ":""}${esc(Store.fmtDate(rows[0].date,{weekday:"long",month:"short",day:"numeric"}))}${rows[0].manual?" · entered afterwards":""}${rows[0].edited?" · edited":""}</p></header>
   <section class="panel r-sum"><div class="label">Practiced</div><div class="r-big">${tot} min</div>
     ${blocks}
     ${ciSummary(rows[0].date)}
@@ -664,10 +671,20 @@ const act={
   co(el){const q=el.dataset.q;coDraft[q]=q==="hq"?+el.dataset.v:el.dataset.v;P.render()},
   cosave(){if(!ciReady(coDraft))return;const d=Store.today(),c=Store.get("checkins",[]),last=plog().filter(x=>x.date===d&&x.run).pop();
     c.push({run:last?last.run:null,date:d,when:"end",fun:coDraft.fun,life:coDraft.life,hq:coDraft.hq,at:Date.now()});Store.set("checkins",c);coDraft={};P.go("",true)},
-  odisc(el){if(!openDraft)return;openDraft.disc=el.dataset.v;P.render()},
-  omode(el){if(!openDraft)return;openDraft.mode=el.dataset.v;P.render()},
-  omin(el){if(!openDraft)return;openDraft.min=el.dataset.d?Math.max(5,Math.min(180,openDraft.min+ +el.dataset.d)):+el.dataset.v;P.render()},
-  ostart(){const d=openDraft;if(!d||!d.disc)return;const st=Store.get("settings",{});st.open={mode:d.mode,min:d.min};Store.set("settings",st);openDraft=null;startOpen(d)},
+  odisc(el){if(!openDraft)return;syncOpen();openDraft.disc=el.dataset.v;P.render()},
+  omode(el){if(!openDraft)return;syncOpen();openDraft.mode=el.dataset.v;if(el.dataset.v==="down")openDraft.min=Math.max(5,Math.min(180,openDraft.min));P.render()},
+  omin(el){if(!openDraft)return;syncOpen();const lo=openDraft.mode==="log"?1:5,hi=openDraft.mode==="log"?300:180;
+    openDraft.min=el.dataset.d?Math.max(lo,Math.min(hi,openDraft.min+ +el.dataset.d)):+el.dataset.v;P.render()},
+  ostart(){syncOpen();const d=openDraft;if(!d||!d.disc||d.mode==="log")return;d.min=Math.max(5,Math.min(180,d.min));
+    const st=Store.get("settings",{});st.open={mode:d.mode,min:d.min};Store.set("settings",st);openDraft=null;startOpen(d)},
+  /* Practice done without the clock: saved straight to the log as Open Practice (Extra Practice), no check-in. */
+  osave(){syncOpen();const d=openDraft;if(!d||!d.disc)return;
+    const m=document.getElementById("oMin"),min=parseInt(m&&m.value,10),date=d.date||Store.today();
+    if(!(min>=1&&min<=300)){alert("Enter the minutes you practiced (1 to 300).");m&&m.focus();return}
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||date>Store.today()){alert("Pick today or an earlier day.");return}
+    const disc=OPEN_DISC.find(x=>x[0]===d.disc),id=Store.uid(),log=plog();
+    log.push({run:id,date,s:"open",open:true,manual:true,title:"Open Practice · "+disc[1],disc:disc[0],min,done:true,games:[]});
+    Store.set("practiceLog",log);openDraft=null;P.go("sum/"+id,true)},
   rshort(){if(!run)return;const b=blk();b.short=!b.short;saveRun();P.render()},
   /* editing a finished session */
   edtal(el){if(!ed)return;syncEdMin();const x=ed.rows[+el.dataset.i],rr=x.results[+el.dataset.r],row=rr.rows[+el.dataset.j];

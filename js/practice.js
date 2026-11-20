@@ -214,7 +214,7 @@ function render(){
     case "sum":html=Sessions.sumView(b,p[2]==="new");if(!html){go("",true);return}break;
     case "edit":html=Sessions.editView(b);if(!html){go("",true);return}break;
     case "checkout":html=Sessions.checkoutView();if(!html){go("",true);return}break;
-    case "open":html=Sessions.openView();if(!html){go(Sessions.running()?"run":"",true);return}break;
+    case "open":html=Sessions.openView();break;
     case "ge":{const g=games.find(x=>x.id===b&&x.status!=="active");if(!g){go("",true);return}html=editGame(g);break}
     default:go("",true);return;
   }
