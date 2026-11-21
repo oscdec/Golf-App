@@ -86,7 +86,8 @@ with sync_playwright() as p:
     # ---- edit a past session ----
     run1=log[0]["run"]
     pg.goto(BASE+f"#practice/sum/{run1}");pg.wait_for_timeout(200)
-    pg.click("a:has-text('Edit Session')");pg.wait_for_timeout(200)
+    pg.click(".s-sumhd a:has-text('Change Time')");pg.wait_for_timeout(200)
+    check(pg.locator("#practiceRoot h1").text_content()=="Edit Session","Change Time next to the total opens Edit Session")
     pg.fill("[data-edmin='0']","25")
     pg.click('[data-act=edpick][data-v="7"]');pg.click("[data-act=edshort]")
     pg.click('[data-act=edci][data-w=start][data-q=hq][data-v="5"]')

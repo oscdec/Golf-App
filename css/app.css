@@ -576,3 +576,4 @@ button,.ghost,.r-opt,.p-btn,.r-back,.r-name,.s-name,.r-title,summary,h2,h3,.seg 
 .s-omode .r-opt{flex:1 1 30%}
 .s-ominstep label{display:flex;align-items:center;justify-content:center;gap:6px;font:600 1.1rem var(--f-mono)}
 .s-ominstep input{width:4.2em;text-align:center;font:600 1.15rem var(--f-mono);border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--fg);padding:4px}
+.s-sumhd{display:flex;justify-content:space-between;align-items:center;gap:10px}

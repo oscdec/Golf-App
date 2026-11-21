@@ -573,7 +573,7 @@ function sumView(id,fresh){
       ${x.results&&x.results.length?resultsHtml(x):""}
       ${x.games&&x.games.length?`<div class="r-list">${x.games.map(P.gameRow).join("")}</div>`:""}</div>`}).join("");
   return `${fresh?"":`<a class="r-back" href="#practice">‹ Practice</a>`}<header><h1>${esc(name)}</h1><p class="sub">${fresh?"Session done · ":""}${esc(Store.fmtDate(rows[0].date,{weekday:"long",month:"short",day:"numeric"}))}${rows[0].manual?" · entered afterwards":""}${rows[0].edited?" · edited":""}</p></header>
-  <section class="panel r-sum"><div class="label">Practiced</div><div class="r-big">${tot} min</div>
+  <section class="panel r-sum"><div class="s-sumhd"><div class="label">Practiced</div><a class="ghost sm" href="#practice/edit/${esc(id)}">Change Time</a></div><div class="r-big">${tot} min</div>
     ${blocks}
     ${ciSummary(rows[0].date)}
     ${fresh?`<p class="hint">Done sessions are highlighted on this week's plan.</p>`:""}</section>
@@ -629,7 +629,7 @@ function editView(id){
     ${t==="yn"?`<div class="r-opts">${[["yes","Yes"],["no","No"]].map(([v,l])=>`<button class="r-opt" data-act="edci" data-w="${w}" data-q="${k}" data-v="${v}" aria-pressed="${ed.ci[w][k]===v}">${l}</button>`).join("")}</div>`
       :`<div class="r-nums s-hq">${Array.from({length:10},(_,n)=>`<button class="r-num" data-act="edci" data-w="${w}" data-q="${k}" data-v="${n+1}" aria-pressed="${ed.ci[w][k]===n+1}">${n+1}</button>`).join("")}</div>`}</div>`).join("");
   return `<a class="r-back" href="#practice/sum/${esc(id)}">‹ Session</a>
-  <header><h1>Edit Session</h1><p class="sub">${esc(Store.fmtDate(ed.date,{weekday:"long",month:"short",day:"numeric"}))}. Change anything, then tap Save Changes.</p></header>
+  <header><h1>Edit Session</h1><p class="sub">${esc(Store.fmtDate(ed.date,{weekday:"long",month:"short",day:"numeric"}))}. Change anything, then tap Save Changes. Forgot to resume after a pause? Type the real minutes in each block's Minutes box.</p></header>
   ${blocks}
   <section class="panel s-cis"><h2>That Day's Check-In</h2><div class="label">Start Of The Day</div>${ciq("start")}<div class="label">Check-Out</div>${ciq("end")}
     <p class="hint">The check-in belongs to the day, so changing it here changes it for every session that day. A part is only saved once all three questions are answered.</p></section>
